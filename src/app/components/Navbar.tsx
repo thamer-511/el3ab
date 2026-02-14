@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import logo from 'figma:asset/7500a9e553a0bd6ca122efd627d48c45b32bf668.png';
+import logo from 'asset/mainlogo.png';
 
 export const Navbar = () => {
   return (
