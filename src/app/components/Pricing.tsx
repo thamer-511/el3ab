@@ -1,10 +1,11 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Check, Star } from 'lucide-react';
+import { Link } from 'react-router';
 
 export const Pricing = () => {
   return (
-    <section className="relative py-24 bg-[#F3EAD3] overflow-hidden">
+    <section id="pricing" className="relative py-24 bg-[#F3EAD3] overflow-hidden">
       <div className="container mx-auto px-4 relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -49,9 +50,9 @@ export const Pricing = () => {
               ))}
             </ul>
 
-            <button className="mt-8 w-full py-4 rounded-xl border-2 border-[#E08C36] text-[#E08C36] font-['Lalezar'] text-2xl hover:bg-[#E08C36] hover:text-[#FDF8E8] transition-all">
+            <Link to="/contact" className="mt-8 block w-full rounded-xl border-2 border-[#E08C36] py-4 text-center font-['Lalezar'] text-2xl text-[#E08C36] transition-all hover:bg-[#E08C36] hover:text-[#FDF8E8]">
               اشترك الآن
-            </button>
+            </Link>
           </motion.div>
 
           {/* Plan 2: Monthly (Featured) */}
@@ -87,9 +88,9 @@ export const Pricing = () => {
               ))}
             </ul>
 
-            <button className="mt-8 w-full py-4 rounded-xl border-4 border-[#FDF8E8] bg-[#FDF8E8] text-[#6A8D56] font-['Lalezar'] text-2xl hover:bg-[#E08C36] hover:text-[#FDF8E8] hover:border-[#E08C36] transition-all shadow-[4px_4px_0px_#2D3436]">
+            <Link to="/contact" className="mt-8 block w-full rounded-xl border-4 border-[#FDF8E8] bg-[#FDF8E8] py-4 text-center font-['Lalezar'] text-2xl text-[#6A8D56] shadow-[4px_4px_0px_#2D3436] transition-all hover:border-[#E08C36] hover:bg-[#E08C36] hover:text-[#FDF8E8]">
               اشترك الآن
-            </button>
+            </Link>
           </motion.div>
         </div>
       </div>
