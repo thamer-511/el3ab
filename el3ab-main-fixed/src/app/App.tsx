@@ -5,6 +5,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { Footer } from './components/Footer';
 import { Navbar } from './components/Navbar';
 import { PaperOverlay } from './components/PaperOverlay';
+import { SubscriptionGate } from './components/SubscriptionGate';
 import { HomePage } from './pages/HomePage';
 import { GamesPage } from './pages/GamesPage';
 import { GameDetailsPage } from './pages/GameDetailsPage';
@@ -51,7 +52,13 @@ function App() {
                 <HurufJoin />
               </ProtectedRoute>
             } />
-            
+            <Route path="/games/huruf" element={
+              <ProtectedRoute>
+                <SubscriptionGate gameType="huruf">
+                  <HurufMain />
+                </SubscriptionGate>
+              </ProtectedRoute>
+            } />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <Footer />
