@@ -41,17 +41,7 @@ function App() {
             <Route path="/privacy" element={<SupportPage type="privacy" />} />
             <Route path="/terms" element={<SupportPage type="terms" />} />
             
-            {/* Protected Routes */}
-            <Route path="/games/huruf" element={
-              <ProtectedRoute>
-                <HurufMain />
-              </ProtectedRoute>
-            } />
-            <Route path="/games/huruf/join" element={
-              <ProtectedRoute>
-                <HurufJoin />
-              </ProtectedRoute>
-            } />
+            {/* Protected Routes - مع SubscriptionGate */}
             <Route path="/games/huruf" element={
               <ProtectedRoute>
                 <SubscriptionGate gameType="huruf">
@@ -59,6 +49,15 @@ function App() {
                 </SubscriptionGate>
               </ProtectedRoute>
             } />
+            
+            <Route path="/games/huruf/join" element={
+              <ProtectedRoute>
+                <SubscriptionGate gameType="huruf">
+                  <HurufJoin />
+                </SubscriptionGate>
+              </ProtectedRoute>
+            } />
+            
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <Footer />
