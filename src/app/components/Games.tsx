@@ -56,9 +56,9 @@ export const Games = () => {
             </div>
             <h3 className="mb-2 font-['Lalezar'] text-4xl text-[#A0AEC0]">المزيد قريباً</h3>
             <p className="mb-6 font-['Cairo'] font-semibold text-[#A0AEC0]">سباق المشاهدين • ولا كلمة • مافيا<br />والمزيد من الألعاب المشوقة في الطريق!</p>
-            <button disabled className="w-full cursor-not-allowed rounded-xl bg-[#EDF2F7] py-3 font-['Lalezar'] text-xl text-[#A0AEC0]">
-              قريباً...
-            </button>
+            <Link to="/games/huruf" className="block w-full rounded-xl border-2 border-[#2D3436] bg-[#FDF8E8] py-3 font-['Lalezar'] text-xl text-[#2D3436] transition hover:bg-[#E08C36] hover:text-white">
+              لعبة خلية الحروف (تجريبي)
+            </Link>
           </motion.div>
         </div>
       </div>

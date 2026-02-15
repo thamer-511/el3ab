@@ -20,6 +20,9 @@ export const GamesPage = () => {
           <Link to="/games/riddles" className="rounded-xl border-2 border-[#E08C36] bg-[#E08C36] px-6 py-2 font-['Lalezar'] text-xl text-[#FDF8E8]">
             صفحة فوازير
           </Link>
+          <Link to="/games/huruf" className="rounded-xl border-2 border-[#2D3436] bg-[#FDF8E8] px-6 py-2 font-['Lalezar'] text-xl text-[#2D3436]">
+            خلية الحروف (شاشة رئيسية)
+          </Link>
         </div>
       </section>
     </main>

@@ -8,6 +8,8 @@ import { GamesPage } from './pages/GamesPage';
 import { GameDetailsPage } from './pages/GameDetailsPage';
 import { PricingPage } from './pages/PricingPage';
 import { SupportPage } from './pages/SupportPage';
+import { HurufMain } from './pages/games/HurufMain';
+import { HurufJoin } from './pages/games/HurufJoin';
 
 function App() {
   useEffect(() => {
@@ -24,6 +26,8 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/games" element={<GamesPage />} />
+          <Route path="/games/huruf" element={<HurufMain />} />
+          <Route path="/games/huruf/join" element={<HurufJoin />} />
           <Route path="/games/:slug" element={<GameDetailsPage />} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/faq" element={<SupportPage type="faq" />} />
