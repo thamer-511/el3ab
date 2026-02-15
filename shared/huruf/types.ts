@@ -34,6 +34,7 @@ export interface HurufSessionState {
   buzzer: BuzzerState;
   attemptNo: AttemptNo;
   stage: BuzzStage;
+  allowedBuzzTeams: Team[];
   winner: Team | null;
   updatedAt: number;
 }

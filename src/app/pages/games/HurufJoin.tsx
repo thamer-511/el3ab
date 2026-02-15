@@ -3,7 +3,14 @@ import { useSearchParams } from 'react-router';
 import type { HurufServerEvent, Team } from '../../../../shared/huruf/types';
 import { connectHurufSocket } from '../../lib/huruf';
 
-type ViewState = 'READY' | 'YOU_BUZZED' | 'OTHER_TEAM_BUZZED' | 'LOCKED' | 'DISCONNECTED';
+type ViewState = 'READY' | 'YOU_BUZZED' | 'OTHER_TEAM_BUZZED' | 'DISCONNECTED';
+
+const statusText: Record<ViewState, string> = {
+  READY: 'جاهز للضغط',
+  YOU_BUZZED: 'أنت ضغطت أولاً',
+  OTHER_TEAM_BUZZED: 'الفريق الآخر ضغط أولاً',
+  DISCONNECTED: 'غير متصل',
+};
 
 export const HurufJoin = () => {
   const [searchParams] = useSearchParams();
@@ -47,13 +54,13 @@ export const HurufJoin = () => {
   return (
     <main className="container mx-auto flex min-h-[70vh] max-w-lg flex-col items-center justify-center px-4 py-10 text-center">
       <h1 className="font-['Lalezar'] text-5xl text-[#6A8D56]">جرس {team === 'green' ? 'الفريق الأخضر' : 'الفريق الأحمر'}</h1>
-      <p className="mt-4 font-['Cairo'] font-bold">الحالة: {status}</p>
+      <p className="mt-4 font-['Cairo'] font-bold">الحالة: {statusText[status]}</p>
       <button
         disabled={!canBuzz}
         onClick={() => sendRef.current?.({ type: 'BUZZ_REQUEST', team })}
         className="mt-8 h-56 w-56 rounded-full border-8 border-[#2D3436] bg-[#E08C36] font-['Lalezar'] text-5xl text-white shadow-[8px_8px_0px_#2D3436] disabled:opacity-60"
       >
-        BUZZ
+        جرس
       </button>
       {status === 'DISCONNECTED' ? <p className="mt-4">جاري إعادة الاتصال...</p> : null}
     </main>

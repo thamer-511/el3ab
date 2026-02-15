@@ -1,19 +1,12 @@
-import type {
-  AttemptNo,
-  BuzzStage,
-  HurufCell,
-  HurufClientEvent,
-  HurufQuestion,
-  HurufServerEvent,
-  HurufSessionState,
-  Team,
-} from '../../../shared/huruf/types';
+import type { HurufCell, HurufClientEvent, HurufQuestion, HurufServerEvent, HurufSessionState, Team } from '../../../shared/huruf/types';
 import questionBank from '../../../shared/huruf/questions.ar.json';
 
 type SocketMeta = { role: 'main' | 'mobile'; team?: Team };
 
 const GRID_SIZE = 6;
 const LETTERS = ['ا', 'ب', 'ت', 'ث', 'ج', 'ح'];
+
+const otherTeam = (team: Team): Team => (team === 'green' ? 'red' : 'green');
 
 export class HurufSessionDO {
   private readonly sockets = new Map<WebSocket, SocketMeta>();
@@ -55,6 +48,7 @@ export class HurufSessionDO {
       buzzer: { locked: false, lockedBy: null },
       attemptNo: 1,
       stage: 'first',
+      allowedBuzzTeams: ['green', 'red'],
       winner: null,
       updatedAt: Date.now(),
     };
@@ -113,7 +107,7 @@ export class HurufSessionDO {
         await this.resetBuzzer();
         return;
       case 'MAIN_NEW_QUESTION':
-        await this.newQuestion();
+        await this.newQuestion(true);
         return;
       case 'PING':
         socket.send(JSON.stringify({ type: 'SESSION_STATE', state: this.state } satisfies HurufServerEvent));
@@ -146,6 +140,7 @@ export class HurufSessionDO {
     this.state.activeCellId = null;
     this.state.activeQuestion = null;
     this.state.buzzer = { locked: false, lockedBy: null };
+    this.state.allowedBuzzTeams = ['green', 'red'];
     this.state.updatedAt = Date.now();
     await this.persistState();
     this.broadcastState();
@@ -153,12 +148,15 @@ export class HurufSessionDO {
 
   private async selectCell(cellId: string) {
     if (this.state.status !== 'playing') return;
+    if (this.state.activeCellId) return;
+
     const cell = this.state.board.find((c) => c.id === cellId);
     if (!cell || cell.closed) return;
 
     this.state.activeCellId = cellId;
     this.state.attemptNo = 1;
     this.state.stage = 'first';
+    this.state.allowedBuzzTeams = ['green', 'red'];
     this.state.buzzer = { locked: false, lockedBy: null };
 
     const question = this.pickQuestion(cellId);
@@ -172,14 +170,21 @@ export class HurufSessionDO {
     this.broadcastState();
   }
 
-  private async newQuestion() {
+  private async newQuestion(resetAttempt: boolean) {
     if (!this.state.activeCellId) return;
     const question = this.pickQuestion(this.state.activeCellId);
     if (!question) return;
 
+    if (resetAttempt) {
+      this.state.attemptNo = 1;
+    }
+
+    this.state.stage = 'first';
+    this.state.allowedBuzzTeams = ['green', 'red'];
     this.state.activeQuestion = question;
     this.state.buzzer = { locked: false, lockedBy: null };
     this.state.updatedAt = Date.now();
+
     await this.persistState();
     this.broadcast({ type: 'QUESTION_CHANGED', cellId: this.state.activeCellId, question });
     this.broadcastState();
@@ -195,7 +200,9 @@ export class HurufSessionDO {
 
   private async handleBuzzRequest(team: Team) {
     if (this.state.status !== 'playing') return;
+    if (!this.state.activeCellId) return;
     if (this.state.buzzer.locked) return;
+    if (!this.state.allowedBuzzTeams.includes(team)) return;
 
     this.state.buzzer = { locked: true, lockedBy: team };
     this.state.updatedAt = Date.now();
@@ -205,25 +212,22 @@ export class HurufSessionDO {
   }
 
   private async markWrong() {
-    if (!this.state.activeCellId) return;
+    if (!this.state.activeCellId || !this.state.buzzer.lockedBy) return;
 
     if (this.state.stage === 'first') {
       this.state.stage = 'other';
+      this.state.allowedBuzzTeams = [otherTeam(this.state.buzzer.lockedBy)];
       this.state.buzzer = { locked: false, lockedBy: null };
     } else if (this.state.stage === 'other') {
       this.state.stage = 'final';
+      this.state.allowedBuzzTeams = ['green', 'red'];
       this.state.buzzer = { locked: false, lockedBy: null };
     } else {
       if (this.state.attemptNo === 1) {
         this.state.attemptNo = 2;
       }
-      this.state.stage = 'first';
-      this.state.buzzer = { locked: false, lockedBy: null };
-      const question = this.pickQuestion(this.state.activeCellId);
-      if (question) {
-        this.state.activeQuestion = question;
-        this.broadcast({ type: 'QUESTION_CHANGED', cellId: this.state.activeCellId, question });
-      }
+      await this.newQuestion(false);
+      return;
     }
 
     this.state.updatedAt = Date.now();
@@ -256,6 +260,7 @@ export class HurufSessionDO {
     this.state.buzzer = { locked: false, lockedBy: null };
     this.state.attemptNo = 1;
     this.state.stage = 'first';
+    this.state.allowedBuzzTeams = ['green', 'red'];
     this.state.updatedAt = Date.now();
 
     await this.persistState();
