@@ -7,11 +7,10 @@ binding = "DB"
 database_name = "el3b_db"
 database_id = "d83ddac2-7e85-4764-9415-be684b30950b"
 
-# Durable Objects
+# Durable Objects (for Cloudflare Pages)
 [[durable_objects.bindings]]
 name = "HURUF_SESSION_DO"
 class_name = "HurufSessionDO"
-script_name = "el3ab"
 
 # Migrations
 [[migrations]]
