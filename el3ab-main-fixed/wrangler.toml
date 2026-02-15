@@ -10,6 +10,7 @@ database_id = "your-database-id-here"
 [[durable_objects.bindings]]
 name = "HURUF_SESSION_DO"
 class_name = "HurufSessionDO"
+script_name = "el3ab"
 
 [[migrations]]
 tag = "v1"
