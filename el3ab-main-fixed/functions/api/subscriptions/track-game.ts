@@ -1,5 +1,5 @@
-import { getSessionIdFromRequest, getSessionUser } from '../../../lib/auth';
-import { getUserAccessInfo, incrementGamesPlayed } from '../../../lib/subscriptions';
+import { getSessionIdFromRequest, getSessionUser } from '../../lib/auth';
+import { getUserAccessInfo, incrementGamesPlayed } from '../../lib/subscriptions';
 
 export interface Env {
   DB: D1Database;
