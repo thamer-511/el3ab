@@ -1,0 +1,11 @@
+name = "el3ab"
+main = "functions/_worker.ts"
+compatibility_date = "2025-01-01"
+
+[[durable_objects.bindings]]
+name = "HURUF_SESSION_DO"
+class_name = "HurufSessionDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["HurufSessionDO"]

@@ -71,7 +71,7 @@ export const Features = () => {
   ];
 
   return (
-    <section className="relative py-24 bg-[#F3EAD3]">
+    <section id="features" className="relative py-24 bg-[#F3EAD3]">
       <div className="container mx-auto px-4">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
