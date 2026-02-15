@@ -13,53 +13,37 @@ export const SubscriptionGate: React.FC<SubscriptionGateProps> = ({ children, ga
   const navigate = useNavigate();
   const [accessInfo, setAccessInfo] = useState<UserAccessInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const checkAccess = async () => {
-      // 1. تأكد من تسجيل الدخول
+      // 1. Check if user is logged in
       if (!user) {
-        console.log('🔒 ما في مستخدم - تحويل للـ login');
         navigate('/login');
         return;
       }
 
       try {
-        console.log('🔍 جاري التحقق من الوصول...');
-        
         const response = await fetch('/api/subscriptions/access', {
           credentials: 'include',
         });
 
-        console.log('📡 Response status:', response.status);
-
         if (response.ok) {
           const data: UserAccessInfo = await response.json();
-          console.log('📊 Access Info:', data);
-          
           setAccessInfo(data);
 
-          // 2. شيك الوصول
+          // 2. Check if user has access
           if (!data.has_access) {
-            console.log('❌ ما عنده وصول - تحويل للأسعار');
-            console.log('السبب:', {
-              is_expired: data.is_expired,
-              games_remaining: data.games_remaining,
-              needs_subscription: data.needs_subscription
-            });
+            // No access - redirect to pricing
             navigate('/pricing');
-          } else {
-            console.log('✅ عنده وصول - السماح بالدخول');
           }
+          // If has access, component will render children
         } else {
-          const errorData = await response.json();
-          console.error('❌ خطأ في API:', errorData);
-          setError(errorData.error || 'خطأ غير معروف');
+          // API error - redirect to pricing
           navigate('/pricing');
         }
       } catch (error) {
-        console.error('💥 Exception:', error);
-        setError(error instanceof Error ? error.message : 'خطأ غير معروف');
+        console.error('Subscription check error:', error);
+        // Network error - redirect to pricing
         navigate('/pricing');
       } finally {
         setLoading(false);
@@ -69,6 +53,7 @@ export const SubscriptionGate: React.FC<SubscriptionGateProps> = ({ children, ga
     checkAccess();
   }, [user, navigate]);
 
+  // Loading state
   if (loading) {
     return (
       <div className="flex min-h-[80vh] items-center justify-center">
@@ -80,25 +65,11 @@ export const SubscriptionGate: React.FC<SubscriptionGateProps> = ({ children, ga
     );
   }
 
-  if (error) {
-    return (
-      <div className="flex min-h-[80vh] items-center justify-center">
-        <div className="text-center">
-          <p className="font-['Cairo'] font-bold text-red-600">خطأ: {error}</p>
-          <button 
-            onClick={() => navigate('/pricing')}
-            className="mt-4 rounded-lg bg-[#6A8D56] px-6 py-2 font-['Cairo'] text-white"
-          >
-            اذهب للأسعار
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+  // No access - will redirect, return null
   if (!accessInfo?.has_access) {
     return null;
   }
 
+  // Has access - render the game!
   return <>{children}</>;
 };
