@@ -1,9 +1,12 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Link, NavLink } from 'react-router';
+import { useAuth } from '../contexts/AuthContext';
 import logo from '../../assets/7500a9e553a0bd6ca122efd627d48c45b32bf668.png';
 
 export const Navbar = () => {
+  const { user, logout } = useAuth();
+
   return (
     <nav className="sticky top-0 z-40 border-b-4 border-[#6A8D56] bg-[#FDF8E8]">
       <div className="container mx-auto flex items-center justify-between px-6 py-4">
@@ -24,11 +27,44 @@ export const Navbar = () => {
           </NavLink>
         </div>
 
-        <motion.div whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.95, y: 0 }}>
-          <Link to="/games" className="rounded-full border-2 border-[#E08C36] bg-[#E08C36] px-6 py-2 font-['Lalezar'] text-lg text-[#FDF8E8] shadow-[4px_4px_0px_#6A8D56] transition-all hover:bg-[#FDF8E8] hover:text-[#E08C36]">
-            ابدأ اللعب
-          </Link>
-        </motion.div>
+        <div className="flex items-center gap-3">
+          {user ? (
+            <>
+              <span className="hidden md:block font-['Cairo'] font-bold text-[#5F6A56]">
+                مرحباً، {user.name}
+              </span>
+              <motion.button
+                whileHover={{ scale: 1.05, y: -2 }}
+                whileTap={{ scale: 0.95, y: 0 }}
+                onClick={() => logout()}
+                className="rounded-full border-2 border-[#E08C36] bg-[#E08C36] px-6 py-2 font-['Lalezar'] text-lg text-[#FDF8E8] shadow-[4px_4px_0px_#6A8D56] transition-all hover:bg-[#FDF8E8] hover:text-[#E08C36]"
+              >
+                تسجيل الخروج
+              </motion.button>
+            </>
+          ) : (
+            <>
+              <Link to="/login">
+                <motion.button
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95, y: 0 }}
+                  className="rounded-full border-2 border-[#6A8D56] bg-[#FDF8E8] px-6 py-2 font-['Lalezar'] text-lg text-[#6A8D56] shadow-[4px_4px_0px_#6A8D56] transition-all hover:bg-[#6A8D56] hover:text-[#FDF8E8]"
+                >
+                  تسجيل الدخول
+                </motion.button>
+              </Link>
+              <Link to="/signup">
+                <motion.button
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95, y: 0 }}
+                  className="rounded-full border-2 border-[#E08C36] bg-[#E08C36] px-6 py-2 font-['Lalezar'] text-lg text-[#FDF8E8] shadow-[4px_4px_0px_#6A8D56] transition-all hover:bg-[#FDF8E8] hover:text-[#E08C36]"
+                >
+                  إنشاء حساب
+                </motion.button>
+              </Link>
+            </>
+          )}
+        </div>
       </div>
     </nav>
   );
