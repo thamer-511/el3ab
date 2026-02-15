@@ -12,20 +12,30 @@ export const HurufMain = () => {
   const [sessionId, setSessionId] = useState<string>('');
   const [state, setState] = useState<HurufSessionState | null>(null);
   const [send, setSend] = useState<((event: any) => void) | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
-    createHurufSession().then(({ sessionId: id }) => {
-      setSessionId(id);
-      const socket = connectHurufSocket(id, (event: HurufServerEvent) => {
-        if (event.type === 'SESSION_STATE') {
-          setState(event.state);
-        }
+    
+    createHurufSession()
+      .then(({ sessionId: id }) => {
+        setSessionId(id);
+        const socket = connectHurufSocket(id, (event: HurufServerEvent) => {
+          if (event.type === 'SESSION_STATE') {
+            setState(event.state);
+          }
+        });
+        setSend(() => socket.send);
+        socket.ws.onopen = () => socket.send({ type: 'JOIN', role: 'main' });
+        cleanup = () => socket.ws.close();
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Failed to create Huruf session:', err);
+        setError('فشل في إنشاء جلسة اللعبة. يرجى المحاولة لاحقاً.');
+        setLoading(false);
       });
-      setSend(() => socket.send);
-      socket.ws.onopen = () => socket.send({ type: 'JOIN', role: 'main' });
-      cleanup = () => socket.ws.close();
-    });
 
     return () => cleanup?.();
   }, []);
@@ -42,6 +52,42 @@ export const HurufMain = () => {
   const onControl = (type: string) => send?.({ type });
   const selectCell = (cellId: string) => send?.({ type: 'MAIN_SELECT_CELL', cellId });
 
+  // Loading state
+  if (loading) {
+    return (
+      <main className="container mx-auto px-4 py-10">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <div className="mx-auto h-16 w-16 animate-spin rounded-full border-4 border-[#6A8D56] border-t-transparent"></div>
+            <p className="mt-4 font-['Cairo'] text-xl font-bold text-[#5F6A56]">جاري تحميل اللعبة...</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <main className="container mx-auto px-4 py-10">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="max-w-md rounded-2xl border-4 border-red-500 bg-white p-8 text-center shadow-lg">
+            <div className="mb-4 text-6xl">⚠️</div>
+            <h2 className="font-['Lalezar'] text-3xl text-red-600 mb-4">عذراً!</h2>
+            <p className="font-['Cairo'] text-lg text-gray-700 mb-6">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-xl border-2 border-[#6A8D56] bg-[#6A8D56] px-8 py-3 font-['Lalezar'] text-xl text-white hover:bg-[#5F7D4E]"
+            >
+              إعادة المحاولة
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // Game interface
   return (
     <main className="container mx-auto px-4 py-10">
       <h1 className="font-['Lalezar'] text-5xl text-[#6A8D56]">خلية الحروف - الشاشة الرئيسية</h1>
