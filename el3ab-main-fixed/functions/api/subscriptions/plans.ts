@@ -1,5 +1,5 @@
-import { getSubscriptionPlans } from '../../../lib/subscriptions';
-import type { SubscriptionPlan } from '../../../../shared/subscription-types';
+import { getSubscriptionPlans } from '../../lib/subscriptions';
+import type { SubscriptionPlan } from '../../../shared/subscription-types';
 
 export interface Env {
   DB: D1Database;
