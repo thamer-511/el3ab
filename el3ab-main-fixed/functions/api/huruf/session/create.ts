@@ -1,5 +1,5 @@
-import { getSessionIdFromRequest, getSessionUser } from '../../lib/auth';
-import { createUserSubscription, generateId } from '../../lib/subscriptions';
+import { getSessionIdFromRequest, getSessionUser } from '../../../lib/auth';
+import { createUserSubscription, generateId } from '../../../lib/subscriptions';
 import type { PaymentTransaction } from '../../../shared/subscription-types';
 
 export interface Env {
