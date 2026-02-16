@@ -95,15 +95,13 @@ export async function getUserAccessInfo(
   const now = Date.now();
   const isExpired = subscription.expires_at ? subscription.expires_at <= now : false;
 
-  // Check games limit (for one_time plans)
   const gamesRemaining = subscription.games_limit 
     ? Math.max(0, subscription.games_limit - subscription.games_played)
-    : null; // null = unlimited
+    : null;
 
-  // Check time limit
   const daysRemaining = subscription.expires_at
     ? Math.max(0, Math.ceil((subscription.expires_at - now) / (1000 * 60 * 60 * 24)))
-    : null; // null = no expiration
+    : null;
 
   const hasAccess = !isExpired && (gamesRemaining === null || gamesRemaining > 0);
 
@@ -142,7 +140,6 @@ export async function createUserSubscription(
   planId: string,
   paymentId?: string
 ): Promise<UserSubscription> {
-  // Get plan details
   const plan = await db.prepare(
     'SELECT * FROM subscription_plans WHERE id = ?'
   ).bind(planId).first<SubscriptionPlan>();
@@ -179,18 +176,10 @@ export async function createUserSubscription(
       starts_at, expires_at, cancelled_at, payment_id, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
-    subscription.id,
-    subscription.user_id,
-    subscription.plan_id,
-    subscription.status,
-    subscription.games_played,
-    subscription.games_limit,
-    subscription.starts_at,
-    subscription.expires_at,
-    subscription.cancelled_at,
-    subscription.payment_id,
-    subscription.created_at,
-    subscription.updated_at
+    subscription.id, subscription.user_id, subscription.plan_id,
+    subscription.status, subscription.games_played, subscription.games_limit,
+    subscription.starts_at, subscription.expires_at, subscription.cancelled_at,
+    subscription.payment_id, subscription.created_at, subscription.updated_at
   ).run();
 
   return subscription;
@@ -206,9 +195,7 @@ export async function cancelUserSubscription(
   const now = Date.now();
   await db.prepare(`
     UPDATE user_subscriptions
-    SET status = 'cancelled',
-        cancelled_at = ?,
-        updated_at = ?
+    SET status = 'cancelled', cancelled_at = ?, updated_at = ?
     WHERE id = ?
   `).bind(now, now, subscriptionId).run();
 }
@@ -227,17 +214,14 @@ export async function getSubscriptionPlans(
 }
 
 /**
- * Expire old subscriptions (run this periodically)
+ * Expire old subscriptions
  */
 export async function expireOldSubscriptions(db: D1Database): Promise<number> {
   const now = Date.now();
   const result = await db.prepare(`
     UPDATE user_subscriptions
-    SET status = 'expired',
-        updated_at = ?
-    WHERE status = 'active'
-      AND expires_at IS NOT NULL
-      AND expires_at <= ?
+    SET status = 'expired', updated_at = ?
+    WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= ?
   `).bind(now, now).run();
 
   return result.meta.changes || 0;
