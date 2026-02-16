@@ -7,8 +7,8 @@ import type {
   HurufServerEvent,
   HurufSessionState,
   Team,
-} from '../../../shared/huruf/types';
-import questionBank from '../../../shared/huruf/questions.ar.json';
+} from '../../shared/huruf/types';
+import questionBank from '../../shared/huruf/questions.ar.json';
 
 type SocketMeta = { role: 'main' | 'mobile'; team?: Team };
 
@@ -91,35 +91,18 @@ export class HurufSessionDO {
 
   private async handleEvent(socket: WebSocket, event: HurufClientEvent) {
     switch (event.type) {
-      case 'JOIN':
-        this.handleJoin(socket, event);
-        return;
-      case 'BUZZ_REQUEST':
-        await this.handleBuzzRequest(event.team);
-        return;
-      case 'MAIN_START_GAME':
-        await this.startGame();
-        return;
-      case 'MAIN_SELECT_CELL':
-        await this.selectCell(event.cellId);
-        return;
-      case 'MAIN_MARK_WRONG':
-        await this.markWrong();
-        return;
-      case 'MAIN_MARK_CORRECT':
-        await this.markCorrect();
-        return;
-      case 'MAIN_RESET_BUZZER':
-        await this.resetBuzzer();
-        return;
-      case 'MAIN_NEW_QUESTION':
-        await this.newQuestion();
-        return;
+      case 'JOIN': this.handleJoin(socket, event); return;
+      case 'BUZZ_REQUEST': await this.handleBuzzRequest(event.team); return;
+      case 'MAIN_START_GAME': await this.startGame(); return;
+      case 'MAIN_SELECT_CELL': await this.selectCell(event.cellId); return;
+      case 'MAIN_MARK_WRONG': await this.markWrong(); return;
+      case 'MAIN_MARK_CORRECT': await this.markCorrect(); return;
+      case 'MAIN_RESET_BUZZER': await this.resetBuzzer(); return;
+      case 'MAIN_NEW_QUESTION': await this.newQuestion(); return;
       case 'PING':
         socket.send(JSON.stringify({ type: 'SESSION_STATE', state: this.state } satisfies HurufServerEvent));
         return;
-      default:
-        return;
+      default: return;
     }
   }
 
@@ -259,7 +242,6 @@ export class HurufSessionDO {
     this.state.updatedAt = Date.now();
 
     await this.persistState();
-    await this.stateStore.storage.put(`cell_owned_${cell.id}`, { owner: team, at: Date.now() });
     this.broadcastState();
   }
 
@@ -310,31 +292,16 @@ export class HurufSessionDO {
     return cells;
   }
 
-  private isTopEdge(cellId: string) {
-    return Number(cellId.split('-')[0]) === 0;
-  }
-
-  private isBottomEdge(cellId: string) {
-    return Number(cellId.split('-')[0]) === GRID_SIZE - 1;
-  }
-
-  private isLeftEdge(cellId: string) {
-    return Number(cellId.split('-')[1]) === 0;
-  }
-
-  private isRightEdge(cellId: string) {
-    return Number(cellId.split('-')[1]) === GRID_SIZE - 1;
-  }
-
   private checkWin(team: Team): boolean {
     const owned = new Map(this.state.board.map((cell) => [cell.id, cell.owner]));
-
     const queue: string[] = [];
     const visited = new Set<string>();
 
     for (const cell of this.state.board) {
       if (owned.get(cell.id) !== team) continue;
-      const starts = team === 'green' ? this.isTopEdge(cell.id) : this.isLeftEdge(cell.id);
+      const row = Number(cell.id.split('-')[0]);
+      const col = Number(cell.id.split('-')[1]);
+      const starts = team === 'green' ? row === 0 : col === 0;
       if (starts) {
         queue.push(cell.id);
         visited.add(cell.id);
@@ -343,7 +310,9 @@ export class HurufSessionDO {
 
     while (queue.length) {
       const id = queue.shift() as string;
-      const reached = team === 'green' ? this.isBottomEdge(id) : this.isRightEdge(id);
+      const row = Number(id.split('-')[0]);
+      const col = Number(id.split('-')[1]);
+      const reached = team === 'green' ? row === GRID_SIZE - 1 : col === GRID_SIZE - 1;
       if (reached) return true;
 
       const cell = this.state.board.find((item) => item.id === id);
@@ -361,7 +330,6 @@ export class HurufSessionDO {
 
   private async persistState() {
     await this.stateStore.storage.put('session_state', this.state);
-    await this.stateStore.storage.put('checkpoint_last_update', this.state.updatedAt);
   }
 
   private broadcastState() {
