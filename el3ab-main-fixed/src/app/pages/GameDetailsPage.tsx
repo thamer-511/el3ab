@@ -1,10 +1,13 @@
 import React from 'react';
 import { Link, useParams } from 'react-router';
+import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../hooks/useSubscription';
 
-const gamesContent: Record<string, { title: string; summary: string; rules: string[] }> = {
+const gamesContent: Record<string, { title: string; summary: string; rules: string[]; playPath: string }> = {
   'alphabet-cell': {
     title: 'خلية الحروف',
     summary: 'لعبة تنافسية تعتمد على تكوين مسار صحيح عبر لوحة الحروف قبل خصمك.',
+    playPath: '/games/huruf',
     rules: [
       'كل لاعب يختار لونًا ويبدأ من زاوية مختلفة.',
       'في كل دور يجب الإجابة على سؤال قبل تثبيت الحركة على اللوحة.',
@@ -14,6 +17,7 @@ const gamesContent: Record<string, { title: string; summary: string; rules: stri
   riddles: {
     title: 'فوازير',
     summary: 'سلسلة فوازير تراثية ممتعة بوقت محدد وتحدي مباشر بين اللاعبين.',
+    playPath: '/games/riddles/play',
     rules: [
       'لكل لغز 20 ثانية فقط للإجابة.',
       'يمكن تفعيل المساعدة مرة واحدة كل جولة.',
@@ -24,6 +28,8 @@ const gamesContent: Record<string, { title: string; summary: string; rules: stri
 
 export const GameDetailsPage = () => {
   const { slug } = useParams();
+  const { user } = useAuth();
+  const { hasAccess, loading } = useSubscription();
   const content = slug ? gamesContent[slug] : undefined;
 
   if (!content) {
@@ -38,6 +44,22 @@ export const GameDetailsPage = () => {
     );
   }
 
+  // Determine where the button should go and what it should say
+  const getButtonConfig = () => {
+    if (!user) {
+      return { to: '/login', label: 'سجل دخولك وابدأ اللعب', color: '#E08C36' };
+    }
+    if (loading) {
+      return { to: '#', label: 'جاري التحقق...', color: '#999' };
+    }
+    if (hasAccess) {
+      return { to: content.playPath, label: 'ابدأ اللعب 🎮', color: '#6A8D56' };
+    }
+    return { to: '/pricing', label: 'اشترك وابدأ اللعب', color: '#E08C36' };
+  };
+
+  const btn = getButtonConfig();
+
   return (
     <main className="container mx-auto px-4 py-16">
       <div className="mx-auto max-w-3xl rounded-3xl border-4 border-[#2D3436] bg-white p-8 shadow-[8px_8px_0px_#6A8D56]">
@@ -51,8 +73,12 @@ export const GameDetailsPage = () => {
             </li>
           ))}
         </ul>
-        <Link to="/pricing" className="mt-8 inline-block rounded-xl border-2 border-[#E08C36] bg-[#E08C36] px-6 py-3 font-['Lalezar'] text-xl text-[#FDF8E8]">
-          اشترك وابدأ اللعب
+        <Link 
+          to={btn.to} 
+          className="mt-8 inline-block rounded-xl border-2 px-6 py-3 font-['Lalezar'] text-xl text-[#FDF8E8] transition-all hover:opacity-90"
+          style={{ borderColor: btn.color, backgroundColor: btn.color }}
+        >
+          {btn.label}
         </Link>
       </div>
     </main>
