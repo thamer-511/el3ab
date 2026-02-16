@@ -1,0 +1,18 @@
+name = "el3ab"
+compatibility_date = "2025-01-01"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "el3b_db"
+database_id = "d83ddac2-7e85-4764-9415-be684b30950b"
+
+# Durable Objects (for Cloudflare Pages)
+[[durable_objects.bindings]]
+name = "HURUF_SESSION_DO"
+class_name = "HurufSessionDO"
+
+# Migrations - use new_sqlite_classes for free plan
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["HurufSessionDO"]
