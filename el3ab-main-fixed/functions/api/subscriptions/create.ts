@@ -1,6 +1,6 @@
 import { getSessionIdFromRequest, getSessionUser } from '../../lib/auth';
 import { createUserSubscription, generateId } from '../../lib/subscriptions';
-import type { PaymentTransaction } from '../../../../shared/subscription-types';
+import type { PaymentTransaction } from '../../../shared/subscription-types';
 
 export interface Env {
   DB: D1Database;
@@ -16,7 +16,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
     // Get authenticated user
     const sessionId = getSessionIdFromRequest(context.request);
-    
+
     if (!sessionId) {
       return new Response(JSON.stringify({ error: 'Not authenticated' }), {
         status: 401,
@@ -25,7 +25,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     const user = await getSessionUser(context.env.DB, sessionId);
-    
+
     if (!user) {
       return new Response(JSON.stringify({ error: 'Invalid or expired session' }), {
         status: 401,
@@ -33,8 +33,24 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
     }
 
-    const body = await context.request.json() as CreateSubscriptionRequest;
-    
+    // Safely parse body - guard against empty body
+    let body: CreateSubscriptionRequest;
+    try {
+      const text = await context.request.text();
+      if (!text) {
+        return new Response(JSON.stringify({ error: 'Missing request body' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      body = JSON.parse(text) as CreateSubscriptionRequest;
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     if (!body.plan_id) {
       return new Response(JSON.stringify({ error: 'Missing plan_id' }), {
         status: 400,
@@ -45,7 +61,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // Verify plan exists
     const plan = await context.env.DB.prepare(
       'SELECT * FROM subscription_plans WHERE id = ? AND is_active = 1'
-    ).bind(body.plan_id).first();
+    )
+      .bind(body.plan_id)
+      .first();
 
     if (!plan) {
       return new Response(JSON.stringify({ error: 'Invalid subscription plan' }), {
@@ -57,14 +75,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // Create payment transaction record
     const paymentId = generateId();
     const now = Date.now();
-    
+
     const payment: PaymentTransaction = {
       id: paymentId,
       user_id: user.id,
-      subscription_id: null, // Will be updated after subscription creation
+      subscription_id: null, // will be updated after subscription creation
       amount: plan.price as number,
       currency: plan.currency as string,
-      status: 'completed', // In real app, this would be 'pending' until payment gateway confirms
+      status: 'completed', // in real app this would be 'pending' until payment gateway confirms
       payment_method: body.payment_method || null,
       transaction_reference: body.payment_reference || null,
       metadata: null,
@@ -77,19 +95,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         id, user_id, subscription_id, amount, currency, status,
         payment_method, transaction_reference, metadata, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      payment.id,
-      payment.user_id,
-      payment.subscription_id,
-      payment.amount,
-      payment.currency,
-      payment.status,
-      payment.payment_method,
-      payment.transaction_reference,
-      payment.metadata,
-      payment.created_at,
-      payment.updated_at
-    ).run();
+    `)
+      .bind(
+        payment.id,
+        payment.user_id,
+        payment.subscription_id,
+        payment.amount,
+        payment.currency,
+        payment.status,
+        payment.payment_method,
+        payment.transaction_reference,
+        payment.metadata,
+        payment.created_at,
+        payment.updated_at
+      )
+      .run();
 
     // Create subscription
     const subscription = await createUserSubscription(
@@ -102,23 +122,31 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // Update payment with subscription_id
     await context.env.DB.prepare(
       'UPDATE payment_transactions SET subscription_id = ?, updated_at = ? WHERE id = ?'
-    ).bind(subscription.id, now, paymentId).run();
+    )
+      .bind(subscription.id, now, paymentId)
+      .run();
 
-    return new Response(JSON.stringify({ 
-      success: true,
-      subscription,
-      payment,
-    }), {
-      status: 201,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        subscription,
+        payment,
+      }),
+      {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
   } catch (error) {
     console.error('Create subscription error:', error);
-    return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : 'Internal server error' 
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Internal server error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
   }
 };
