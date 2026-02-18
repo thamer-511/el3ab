@@ -16,7 +16,7 @@ const stageText: Record<HurufSessionState['stage'], string> = {
 };
 
 /* ─────────────────────────────────────────
-   CSS  (injected once into <head>)
+   CSS
 ───────────────────────────────────────── */
 const HURUF_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Lalezar&display=swap');
@@ -37,18 +37,31 @@ const HURUF_CSS = `
   .huruf-root * { box-sizing: border-box; margin: 0; padding: 0; }
   .huruf-root { direction: rtl; font-family: 'Cairo', sans-serif; }
 
-  /* ── HEXAGONS ── */
-  /* Each hex uses clip-path polygon for a pointy-top hex shape */
+  /* ── HEXAGONS (flat-top) ── */
+  .hex-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    position: relative;
+  }
+
+  .hex-row {
+    display: flex;
+    flex-direction: row;
+    position: relative;
+  }
+
   .hex-wrap {
     position: relative;
-    width: 86px;
+    width: 80px;
+    height: 92px;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .hex-wrap::before {
-    content: '';
-    display: block;
-    padding-top: 115.47%;   /* height = width × (2/√3) ≈ 1.1547 */
-  }
+
   .hex {
     position: absolute;
     inset: 0;
@@ -61,33 +74,101 @@ const HURUF_CSS = `
     border: none;
     outline: none;
     font-family: 'Lalezar', serif;
-    font-size: 24px;
+    font-size: 22px;
     color: var(--dark);
+    font-weight: 700;
   }
-  .hex:hover:not(:disabled) {
-    filter: brightness(1.1);
-    transform: scale(1.07);
+
+  .hex:hover:not(:disabled):not(.hex-active) {
+    filter: brightness(1.12);
+    transform: scale(1.08);
     z-index: 2;
   }
-  .hex:disabled { cursor: default; }
+  .hex:disabled:not(.hex-green):not(.hex-red) { cursor: default; }
 
   /* colours */
-  .hex-empty  { background: var(--cream); }
-  .hex-green  { background: linear-gradient(160deg, var(--green), var(--green2)); color: #fff; }
-  .hex-red    { background: linear-gradient(160deg, var(--red-team), var(--red-team2)); color: #fff; }
+  .hex-empty  { background: var(--cream); box-shadow: inset 0 0 0 3px #d6c9a8; }
+  .hex-green  { background: linear-gradient(160deg, var(--green), var(--green2)); color: #fff; box-shadow: inset 0 0 0 3px #3a5a28; }
+  .hex-red    { background: linear-gradient(160deg, var(--red-team), var(--red-team2)); color: #fff; box-shadow: inset 0 0 0 3px #7a1d12; }
   .hex-active {
     background: linear-gradient(160deg,#fff4d6,#ffe099);
-    filter: drop-shadow(0 0 6px rgba(224,140,54,.65));
-    transform: scale(1.1);
+    box-shadow: 0 0 0 3px var(--orange), 0 0 20px rgba(224,140,54,.5);
+    transform: scale(1.12);
     z-index: 3;
   }
-  .hex-closed { background: #ddd; opacity: .45; cursor: default; }
+  .hex-blurred {
+    opacity: 0.35;
+    filter: blur(1.5px);
+    transition: opacity .3s, filter .3s;
+  }
 
-  /* ── ROW LAYOUT ── */
-  .hex-row {
-    display: flex;
-    justify-content: center;
+  /* ── EDGE INDICATORS ── */
+  .board-wrapper {
     position: relative;
+  }
+
+  .edge-label {
+    position: absolute;
+    font-family: 'Lalezar', serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .edge-top {
+    top: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--green);
+  }
+
+  .edge-bottom {
+    bottom: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--green);
+  }
+
+  .edge-right {
+    right: -52px;
+    top: 50%;
+    transform: translateY(-50%) rotate(90deg);
+    color: var(--orange);
+  }
+
+  .edge-left {
+    left: -52px;
+    top: 50%;
+    transform: translateY(-50%) rotate(-90deg);
+    color: var(--orange);
+  }
+
+  /* ── TIMER RING ── */
+  .timer-ring-wrap {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+  }
+  .timer-ring-wrap svg {
+    position: absolute;
+    inset: 0;
+    transform: rotate(-90deg);
+  }
+  .timer-number {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Lalezar', serif;
+    font-size: 26px;
+    font-weight: 700;
+    transition: color .3s;
   }
 
   /* ── BUZZER PULSE ── */
@@ -135,6 +216,13 @@ const HURUF_CSS = `
     to   { opacity:1; transform:translateY(0); }
   }
   .action-toast { animation: toastIn .2s ease; }
+
+  /* ── TIMER DANGER ── */
+  @keyframes timerDanger {
+    0%,100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+  }
+  .timer-danger { animation: timerDanger .4s ease infinite; }
 `;
 
 function injectCSS(id: string, css: string) {
@@ -147,77 +235,134 @@ function injectCSS(id: string, css: string) {
 }
 
 /* ─────────────────────────────────────────
-   HEX BOARD
-   6 columns × 6 rows, offset rows (odd rows
-   shifted right by half a hex width)
+   TIMER RING COMPONENT
 ───────────────────────────────────────── */
-const COLS = 6;
-const ROWS = 6;
-
-interface HexBoardProps {
-  board: HurufSessionState['board'];
-  activeCellId: string | null;
-  isPlaying: boolean;
-  onSelect: (id: string) => void;
-}
-
-function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
-  const rows: (typeof board)[] = [];
-  for (let r = 0; r < ROWS; r++) rows.push(board.slice(r * COLS, r * COLS + COLS));
+function TimerRing({ seconds, total = 10, color }: { seconds: number; total?: number; color: string }) {
+  const r = 28;
+  const circ = 2 * Math.PI * r;
+  const progress = seconds / total;
+  const dash = circ * progress;
+  const isDanger = seconds <= 3;
 
   return (
-    <div style={{ userSelect: 'none', paddingBottom: 8 }}>
-      {rows.map((row, ri) => (
-        <div
-          key={ri}
-          className="hex-row"
-          style={{
-            marginTop: ri === 0 ? 0 : -20,
-            /* Odd rows offset to the right by half a hex */
-            paddingRight: ri % 2 === 1 ? 43 : 0,
-          }}
-        >
-          {row.map((cell) => {
-            const isActive  = cell.id === activeCellId;
-            const colorClass =
-              cell.closed && !cell.owner ? 'hex-closed' :
-              cell.owner === 'green'     ? 'hex-green'  :
-              cell.owner === 'red'       ? 'hex-red'    :
-              isActive                   ? 'hex-active' :
-                                           'hex-empty';
-
-            return (
-              <div
-                key={cell.id}
-                className="hex-wrap"
-                style={{ margin: '0 2px', position: 'relative', zIndex: isActive ? 3 : 1 }}
-              >
-                <button
-                  className={`hex ${colorClass}`}
-                  disabled={!!cell.closed || !isPlaying}
-                  onClick={() => onSelect(cell.id)}
-                  title={cell.letter}
-                >
-                  {cell.letter}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      ))}
+    <div className={`timer-ring-wrap ${isDanger ? 'timer-danger' : ''}`}>
+      <svg viewBox="0 0 72 72" width={72} height={72}>
+        <circle cx={36} cy={36} r={r} fill="none" stroke="#e8dfc4" strokeWidth={5} />
+        <circle
+          cx={36} cy={36} r={r}
+          fill="none"
+          stroke={isDanger ? '#c0392b' : color}
+          strokeWidth={5}
+          strokeDasharray={`${dash} ${circ}`}
+          strokeLinecap="round"
+          style={{ transition: 'stroke-dasharray .25s linear, stroke .3s' }}
+        />
+      </svg>
+      <div className="timer-number" style={{ color: isDanger ? '#c0392b' : color }}>
+        {seconds}
+      </div>
     </div>
   );
 }
 
 /* ─────────────────────────────────────────
-   BUZZER INDICATOR
+   HEX BOARD  – true honeycomb tessellation
+   Flat-top hexagons, odd columns offset down
+───────────────────────────────────────── */
+const COLS = 6;
+const ROWS = 6;
+
+// Flat-top hex dimensions
+const HEX_W = 80;   // px  (tip-to-tip horizontal)
+const HEX_H = 92;   // px  (flat edge to flat edge vertical, approx HEX_W * sin60 * 2)
+const H_OFFSET = HEX_W * 0.75;   // horizontal distance between hex centers
+const V_OFFSET = HEX_H;           // vertical distance between hex centers in same col
+const COL_STAGGER = HEX_H * 0.5;  // odd cols shifted down by half
+
+interface HexBoardProps {
+  board: HurufSessionState['board'];
+  activeCellId: string | null;
+  isPlaying: boolean;
+  hasQuestion: boolean;
+  onSelect: (id: string) => void;
+}
+
+function HexBoard({ board, activeCellId, isPlaying, hasQuestion, onSelect }: HexBoardProps) {
+  // Build grid: cells are [row][col]
+  const grid: (typeof board[0])[][] = [];
+  for (let r = 0; r < ROWS; r++) {
+    grid.push([]);
+    for (let c = 0; c < COLS; c++) {
+      grid[r].push(board[r * COLS + c]);
+    }
+  }
+
+  // Container size
+  const boardW = COLS * H_OFFSET + HEX_W * 0.25;
+  const boardH = ROWS * V_OFFSET + COL_STAGGER;
+
+  return (
+    <div className="board-wrapper" style={{ margin: '36px auto', width: boardW, height: boardH, position: 'relative' }}>
+      {/* Edge labels */}
+      <div className="edge-label edge-top">🟢 أخضر ↑↓</div>
+      <div className="edge-label edge-bottom">🟢 أخضر ↑↓</div>
+      <div className="edge-label edge-right">🟠 برتقالي ↔</div>
+      <div className="edge-label edge-left">🟠 برتقالي ↔</div>
+
+      {grid.map((row, ri) =>
+        row.map((cell, ci) => {
+          const x = ci * H_OFFSET;
+          const y = ri * V_OFFSET + (ci % 2 === 1 ? COL_STAGGER : 0);
+
+          const isActive = cell.id === activeCellId;
+          const isBlurred = hasQuestion && !isActive && !cell.closed;
+
+          const colorClass =
+            cell.owner === 'green' ? 'hex-green' :
+            cell.owner === 'red'   ? 'hex-red'   :
+            isActive               ? 'hex-active' :
+                                     'hex-empty';
+
+          return (
+            <div
+              key={cell.id}
+              className={`hex-wrap ${isBlurred ? 'hex-blurred' : ''}`}
+              style={{
+                position: 'absolute',
+                left: x,
+                top: y,
+                zIndex: isActive ? 5 : 1,
+              }}
+            >
+              <button
+                className={`hex ${colorClass}`}
+                disabled={!!cell.closed || !isPlaying || (!!activeCellId && !isActive)}
+                onClick={() => onSelect(cell.id)}
+                title={cell.letter}
+              >
+                {cell.letter}
+              </button>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────
+   BUZZER INDICATOR with timer
 ───────────────────────────────────────── */
 function BuzzerIndicator({
   lockedBy,
   locked,
+  timerSeconds,
+  timerRunning,
 }: {
   lockedBy: Team | null;
   locked: boolean;
+  timerSeconds: number;
+  timerRunning: boolean;
 }) {
   const isGreen = lockedBy === 'green';
   const isRed   = lockedBy === 'red';
@@ -231,29 +376,33 @@ function BuzzerIndicator({
     <div
       className={pressed ? 'buzzer-active' : ''}
       style={{
-        display: 'flex', alignItems: 'center', gap: 12,
+        display: 'flex', alignItems: 'center', gap: 14,
         background: pressed ? `${accent}18` : '#f3ead3',
         border: `3px solid ${pressed ? accent : '#e0d5be'}`,
-        borderRadius: 16, padding: '13px 20px',
+        borderRadius: 16, padding: '12px 18px',
         transition: 'all .3s',
         color: accent,
       }}
     >
-      <span style={{ fontSize: 28 }}>🔔</span>
+      <span style={{ fontSize: 26 }}>🔔</span>
 
       {pressed ? (
-        <div>
-          <div style={{ fontFamily: 'Lalezar, serif', fontSize: 22, color: accent, lineHeight: 1 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: 'Lalezar, serif', fontSize: 20, color: accent, lineHeight: 1 }}>
             {emoji} {label}
           </div>
           <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 12, color: '#888', marginTop: 3 }}>
-            ضغط الجرس!
+            ضغط الجرس! {timerRunning ? '— يجيب الآن' : ''}
           </div>
         </div>
       ) : (
-        <span style={{ fontFamily: 'Cairo, sans-serif', fontSize: 14, color: '#aaa', fontWeight: 700 }}>
+        <span style={{ fontFamily: 'Cairo, sans-serif', fontSize: 14, color: '#aaa', fontWeight: 700, flex: 1 }}>
           الجرس متاح — في انتظار الفرق
         </span>
+      )}
+
+      {timerRunning && (
+        <TimerRing seconds={timerSeconds} total={10} color={accent} />
       )}
     </div>
   );
@@ -296,7 +445,6 @@ function QuestionBar({
       className="question-bar"
       style={{ borderRadius: 16, overflow: 'hidden', border: `3px solid ${bg}`, boxShadow: `0 8px 28px ${bg}33` }}
     >
-      {/* Label strip */}
       <div style={{
         background: bg, padding: '7px 18px',
         display: 'flex', alignItems: 'center', gap: 10,
@@ -319,10 +467,9 @@ function QuestionBar({
         </span>
       </div>
 
-      {/* Question text */}
       <div style={{ background: '#fff', padding: '22px 26px' }}>
         <p style={{
-          fontFamily: 'Lalezar, serif', fontSize: 30,
+          fontFamily: 'Lalezar, serif', fontSize: 28,
           color: '#2D3436', lineHeight: 1.45, textAlign: 'center',
         }}>
           {question.prompt}
@@ -474,9 +621,6 @@ function ScorePanel({ board }: { board: HurufSessionState['board'] }) {
 
 /* ─────────────────────────────────────────
    QR LOBBY MODAL
-   Shown first when user enters the page.
-   Has "Start" and "Skip" options.
-   Join links do NOT require login.
 ───────────────────────────────────────── */
 function QrCard({ accent, label, link }: { accent: string; label: string; link: string }) {
   return (
@@ -529,13 +673,16 @@ function QrLobby({
         <h2 style={{ fontFamily: 'Lalezar, serif', fontSize: 34, color: '#2D3436', margin: '10px 0 6px' }}>
           خلية الحروف
         </h2>
-        <p style={{ fontFamily: 'Cairo, sans-serif', fontSize: 14, color: '#999', marginBottom: 30 }}>
+        <p style={{ fontFamily: 'Cairo, sans-serif', fontSize: 14, color: '#999', marginBottom: 8 }}>
           امسح رمز QR لكل فريق لربط جرس الهاتف
+        </p>
+        <p style={{ fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#aaa', marginBottom: 30 }}>
+          🟢 الفريق الأخضر: يربط أعلى ↔ أسفل &nbsp;|&nbsp; 🟠 الفريق البرتقالي: يربط يمين ↔ يسار
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 30 }}>
           <QrCard accent="#6A8D56" label="فريق أخضر" link={greenLink} />
-          <QrCard accent="#c0392b" label="فريق أحمر"  link={redLink}   />
+          <QrCard accent="#E08C36" label="فريق برتقالي" link={redLink} />
         </div>
 
         <div style={{ display: 'flex', gap: 12 }}>
@@ -569,7 +716,7 @@ function QrLobby({
 }
 
 /* ─────────────────────────────────────────
-   ROOT  COMPONENT
+   ROOT COMPONENT
 ───────────────────────────────────────── */
 export const HurufMain: React.FC = () => {
   injectCSS('huruf-main-css', HURUF_CSS);
@@ -580,8 +727,36 @@ export const HurufMain: React.FC = () => {
   const [error,     setError]     = useState<string | null>(null);
   const [loading,   setLoading]   = useState(true);
   const [toast,     setToast]     = useState<string | null>(null);
-  const [showLobby, setShowLobby] = useState(true);  // ← QR lobby shown by default
+  const [showLobby, setShowLobby] = useState(true);
+
+  // Client-side countdown timer (starts when buzzer locks)
+  const [timerSeconds, setTimerSeconds]   = useState(10);
+  const [timerRunning, setTimerRunning]   = useState(false);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearTimer = () => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    setTimerRunning(false);
+    setTimerSeconds(10);
+  };
+
+  const startTimer = () => {
+    clearTimer();
+    setTimerSeconds(10);
+    setTimerRunning(true);
+    let remaining = 10;
+    timerIntervalRef.current = setInterval(() => {
+      remaining -= 1;
+      setTimerSeconds(remaining);
+      if (remaining <= 0) {
+        clearTimer();
+      }
+    }, 1000);
+  };
 
   /* ── Session init ── */
   useEffect(() => {
@@ -591,7 +766,20 @@ export const HurufMain: React.FC = () => {
       .then(({ sessionId: id }) => {
         setSessionId(id);
         const socket = connectHurufSocket(id, (event: HurufServerEvent) => {
-          if (event.type === 'SESSION_STATE') setState(event.state);
+          if (event.type === 'SESSION_STATE') {
+            setState(event.state);
+            // Stop timer if buzzer was reset
+            if (!event.state.buzzer.locked) {
+              clearTimer();
+            }
+          }
+          if (event.type === 'BUZZ_LOCKED') {
+            // Start 10s client-side timer when someone buzzes
+            startTimer();
+          }
+          if (event.type === 'BUZZ_RESET') {
+            clearTimer();
+          }
         });
         setSend(() => socket.send);
         socket.ws.onopen = () => socket.send({ type: 'JOIN', role: 'main' });
@@ -603,10 +791,14 @@ export const HurufMain: React.FC = () => {
         setLoading(false);
       });
 
-    return () => cleanup?.();
+    return () => {
+      cleanup?.();
+      clearTimer();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Join links – NO auth required, just open sessionId + team param */
+  /* Join links – NO auth required */
   const joinLinks = useMemo(() => {
     if (!sessionId) return null;
     const base = `${window.location.origin}/games/huruf/join?sessionId=${sessionId}`;
@@ -619,13 +811,17 @@ export const HurufMain: React.FC = () => {
   /* ── Control helpers ── */
   const onControl = (type: string, label: string) => {
     send?.({ type });
+    // Reset timer on mark correct/wrong/reset
+    if (type === 'MAIN_MARK_CORRECT' || type === 'MAIN_MARK_WRONG' || type === 'MAIN_RESET_BUZZER') {
+      clearTimer();
+    }
     if (toastRef.current) clearTimeout(toastRef.current);
     setToast(label);
     toastRef.current = setTimeout(() => setToast(null), 1500);
   };
+
   const selectCell = (cellId: string) => send?.({ type: 'MAIN_SELECT_CELL', cellId });
 
-  /* Lobby actions */
   const handleLobbyStart = () => {
     setShowLobby(false);
     onControl('MAIN_START_GAME', '▶ بدأت اللعبة!');
@@ -683,6 +879,7 @@ export const HurufMain: React.FC = () => {
   const isPlaying     = state?.status === 'playing';
   const isEnded       = state?.status === 'ended';
   const hasActiveCell = !!state?.activeCellId;
+  const hasQuestion   = !!state?.activeQuestion;
 
   /* ── Main UI ── */
   return (
@@ -694,7 +891,6 @@ export const HurufMain: React.FC = () => {
         paddingBottom: 56,
       }}
     >
-
       {/* ═══ STICKY HEADER ═══ */}
       <header style={{
         background: 'linear-gradient(90deg,#2D3436,#3d4649)',
@@ -703,10 +899,9 @@ export const HurufMain: React.FC = () => {
         boxShadow: '0 4px 20px rgba(0,0,0,.25)',
       }}>
         <div style={{
-          maxWidth: 1380, margin: '0 auto', padding: '0 28px', height: 66,
+          maxWidth: 1440, margin: '0 auto', padding: '0 28px', height: 66,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          {/* Left: title */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 26, color: '#E08C36' }}>⬡</span>
             <span style={{ fontFamily: 'Lalezar, serif', fontSize: 27, color: '#FDF8E8' }}>
@@ -720,7 +915,6 @@ export const HurufMain: React.FC = () => {
             </span>
           </div>
 
-          {/* Right: actions + status */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {joinLinks && !showLobby && (
               <button
@@ -763,13 +957,13 @@ export const HurufMain: React.FC = () => {
 
       {/* ═══ WINNER BANNER ═══ */}
       {isEnded && state?.winner && (
-        <div style={{ maxWidth: 1380, margin: '24px auto 0', padding: '0 24px' }}>
+        <div style={{ maxWidth: 1440, margin: '24px auto 0', padding: '0 24px' }}>
           <div
             className="winner-banner"
             style={{
               background: state.winner === 'green'
                 ? 'linear-gradient(135deg,#6A8D56,#4a6b38)'
-                : 'linear-gradient(135deg,#c0392b,#922b21)',
+                : 'linear-gradient(135deg,#E08C36,#b86e20)',
               borderRadius: 18, padding: '22px 36px',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16,
               boxShadow: '0 8px 32px rgba(0,0,0,.2)',
@@ -777,7 +971,7 @@ export const HurufMain: React.FC = () => {
           >
             <span style={{ fontSize: 38 }}>🏆</span>
             <span style={{ fontFamily: 'Lalezar, serif', fontSize: 30, color: '#fff' }}>
-              الفائز: {state.winner === 'green' ? 'الفريق الأخضر' : 'الفريق الأحمر'}
+              الفائز: {state.winner === 'green' ? '🟢 الفريق الأخضر' : '🟠 الفريق البرتقالي'}
             </span>
             <span style={{ fontSize: 38 }}>🏆</span>
           </div>
@@ -786,9 +980,9 @@ export const HurufMain: React.FC = () => {
 
       {/* ═══ BODY ═══ */}
       <div style={{
-        maxWidth: 1380, margin: '28px auto 0', padding: '0 24px',
+        maxWidth: 1440, margin: '28px auto 0', padding: '0 24px',
         display: 'grid',
-        gridTemplateColumns: '1fr 380px',
+        gridTemplateColumns: '1fr 400px',
         gap: 26, alignItems: 'start',
       }}>
 
@@ -800,11 +994,11 @@ export const HurufMain: React.FC = () => {
             background: '#fff', borderRadius: 22,
             border: '3px solid #2D3436', boxShadow: '8px 8px 0 #2D3436',
             padding: '26px 22px 26px',
+            overflowX: 'auto',
           }}>
-            {/* Board header */}
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              marginBottom: 20,
+              marginBottom: 8,
             }}>
               <span style={{ fontFamily: 'Lalezar, serif', fontSize: 20, color: '#2D3436' }}>
                 لوحة اللعب
@@ -821,12 +1015,22 @@ export const HurufMain: React.FC = () => {
               )}
             </div>
 
-            {/* Hex grid */}
+            {/* Win condition reminder */}
+            <div style={{ display: 'flex', gap: 20, justifyContent: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: 'Cairo, sans-serif', fontSize: 12, color: '#6A8D56', fontWeight: 700 }}>
+                🟢 الأخضر: يربط أعلى ↕ أسفل
+              </span>
+              <span style={{ fontFamily: 'Cairo, sans-serif', fontSize: 12, color: '#E08C36', fontWeight: 700 }}>
+                🟠 البرتقالي: يربط يمين ↔ يسار
+              </span>
+            </div>
+
             {state ? (
               <HexBoard
                 board={state.board}
                 activeCellId={state.activeCellId}
                 isPlaying={isPlaying}
+                hasQuestion={hasQuestion}
                 onSelect={selectCell}
               />
             ) : (
@@ -838,13 +1042,13 @@ export const HurufMain: React.FC = () => {
             {/* Legend */}
             <div style={{
               display: 'flex', gap: 20, justifyContent: 'center',
-              marginTop: 26, flexWrap: 'wrap',
+              marginTop: 16, flexWrap: 'wrap',
             }}>
               {[
-                { label: 'الفريق الأخضر', bg: 'linear-gradient(135deg,#6A8D56,#4a6b38)' },
-                { label: 'الفريق الأحمر',  bg: 'linear-gradient(135deg,#c0392b,#922b21)' },
-                { label: 'نشطة',            bg: 'linear-gradient(135deg,#fff4d6,#ffe099)' },
-                { label: 'متاحة',           bg: '#FDF8E8', border: '2px solid #d6c9a8' },
+                { label: 'الفريق الأخضر',     bg: 'linear-gradient(135deg,#6A8D56,#4a6b38)' },
+                { label: 'الفريق البرتقالي',  bg: 'linear-gradient(135deg,#E08C36,#b86e20)' },
+                { label: 'نشطة',              bg: 'linear-gradient(135deg,#fff4d6,#ffe099)', border: '2px solid #E08C36' },
+                { label: 'متاحة',             bg: '#FDF8E8', border: '2px solid #d6c9a8' },
               ].map(({ label, bg, border }) => (
                 <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <span style={{
@@ -870,10 +1074,12 @@ export const HurufMain: React.FC = () => {
             attemptNo={state?.attemptNo ?? 1}
           />
 
-          {/* Buzzer */}
+          {/* Buzzer with timer */}
           <BuzzerIndicator
             lockedBy={state?.buzzer?.lockedBy ?? null}
             locked={state?.buzzer?.locked ?? false}
+            timerSeconds={timerSeconds}
+            timerRunning={timerRunning}
           />
 
           {/* Control panel */}
@@ -910,8 +1116,8 @@ export const HurufMain: React.FC = () => {
             {[
               {
                 label: 'الدور الحالي',
-                value: state?.currentTeamTurn === 'green' ? '🟢 الفريق الأخضر' : '🔴 الفريق الأحمر',
-                color: state?.currentTeamTurn === 'green' ? '#6A8D56' : '#c0392b',
+                value: state?.currentTeamTurn === 'green' ? '🟢 الفريق الأخضر' : '🟠 الفريق البرتقالي',
+                color: state?.currentTeamTurn === 'green' ? '#6A8D56' : '#E08C36',
               },
               {
                 label: 'المرحلة',
