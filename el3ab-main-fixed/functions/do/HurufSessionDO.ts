@@ -13,7 +13,7 @@ import questionBank from '../../shared/huruf/questions.ar.json';
 type SocketMeta = { role: 'main' | 'mobile'; team?: Team };
 
 const GRID_SIZE = 6;
-const LETTERS = ['ا', 'ب', 'ت', 'ث', 'ج', 'ح'];
+const AVAILABLE_LETTERS = Object.keys(questionBank as Record<string, unknown>);
 
 export class HurufSessionDO {
   private readonly sockets = new Map<WebSocket, SocketMeta>();
@@ -29,7 +29,9 @@ export class HurufSessionDO {
 
     if (url.pathname.endsWith('/init') && request.method === 'POST') {
       await this.restoreOrInit();
-      return new Response(JSON.stringify({ ok: true, sessionId: this.state.sessionId }), { headers: { 'content-type': 'application/json' } });
+      return new Response(JSON.stringify({ ok: true, sessionId: this.state.sessionId }), {
+        headers: { 'content-type': 'application/json' },
+      });
     }
 
     if (request.headers.get('Upgrade') === 'websocket') {
@@ -132,12 +134,22 @@ export class HurufSessionDO {
     this.state.updatedAt = Date.now();
     await this.persistState();
     this.broadcastState();
+
+    // Auto-select random first cell
+    const availableCells = this.state.board.filter(c => !c.closed);
+    if (availableCells.length > 0) {
+      const randomCell = availableCells[Math.floor(Math.random() * availableCells.length)];
+      await this.selectCell(randomCell.id);
+    }
   }
 
   private async selectCell(cellId: string) {
     if (this.state.status !== 'playing') return;
     const cell = this.state.board.find((c) => c.id === cellId);
     if (!cell || cell.closed) return;
+
+    // Prevent changing cell once selected
+    if (this.state.activeCellId && this.state.activeCellId !== cellId) return;
 
     this.state.activeCellId = cellId;
     this.state.attemptNo = 1;
@@ -197,8 +209,9 @@ export class HurufSessionDO {
       this.state.stage = 'final';
       this.state.buzzer = { locked: false, lockedBy: null };
     } else {
+      // final stage failed - new attempt
       if (this.state.attemptNo === 1) {
-        this.state.attemptNo = 2;
+        this.state.attemptNo = 2 as AttemptNo;
       }
       this.state.stage = 'first';
       this.state.buzzer = { locked: false, lockedBy: null };
@@ -266,17 +279,22 @@ export class HurufSessionDO {
   }
 
   private createBoard(): HurufCell[] {
+    // Shuffle available letters randomly
+    const shuffled = [...AVAILABLE_LETTERS].sort(() => Math.random() - 0.5);
+
     const cells: HurufCell[] = [];
     for (let row = 0; row < GRID_SIZE; row++) {
       for (let col = 0; col < GRID_SIZE; col++) {
+        const idx = row * GRID_SIZE + col;
         const id = `${row}-${col}`;
-        const letter = LETTERS[(row * GRID_SIZE + col) % LETTERS.length];
+        const letter = shuffled[idx % shuffled.length];
         cells.push({ id, letter, owner: null, closed: false, neighbors: [] });
       }
     }
 
+    // Hex offset grid neighbors
     const offsetsEven = [[-1, -1], [-1, 0], [0, -1], [0, 1], [1, -1], [1, 0]];
-    const offsetsOdd = [[-1, 0], [-1, 1], [0, -1], [0, 1], [1, 0], [1, 1]];
+    const offsetsOdd  = [[-1,  0], [-1, 1], [0, -1], [0, 1], [1,  0], [1, 1]];
 
     for (let row = 0; row < GRID_SIZE; row++) {
       for (let col = 0; col < GRID_SIZE; col++) {
@@ -293,6 +311,8 @@ export class HurufSessionDO {
   }
 
   private checkWin(team: Team): boolean {
+    // Green: top row (row 0) → bottom row (row 5)
+    // Red:   left col (col 0) → right col (col 5)
     const owned = new Map(this.state.board.map((cell) => [cell.id, cell.owner]));
     const queue: string[] = [];
     const visited = new Set<string>();
