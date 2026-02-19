@@ -428,10 +428,8 @@ function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
 /* ─────────────────────────────────────────
    SCORE PANEL
 ───────────────────────────────────────── */
-function ScorePanel({ board }: { board: HurufSessionState['board'] }) {
-  const greenCount = board.filter(c => c.owner === 'green').length;
-  const redCount   = board.filter(c => c.owner === 'red').length;
-  const total      = board.length;
+function ScorePanel({ greenWins, redWins }: { greenWins: number; redWins: number }) {
+  const total = Math.max(1, greenWins + redWins);
 
   return (
     <div style={{
@@ -439,18 +437,21 @@ function ScorePanel({ board }: { board: HurufSessionState['board'] }) {
       background: '#fff', border: '2px solid #e8dfc4',
       borderRadius: 14, padding: '12px 20px',
     }}>
-      <div style={{ textAlign: 'center', minWidth: 44 }}>
+      <div style={{ textAlign: 'center', minWidth: 64 }}>
         <div style={{ fontFamily: 'Lalezar, serif', fontSize: 32, color: '#6A8D56', lineHeight: 1 }}>
-          {greenCount}
+          {greenWins}
         </div>
-        <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 11, color: '#999' }}>أخضر</div>
+        <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 11, color: '#999' }}>فوز أخضر</div>
       </div>
       <div style={{ flex: 1 }}>
+        <div style={{ textAlign: 'center', marginBottom: 6, fontFamily: 'Lalezar, serif', fontSize: 16, color: '#2D3436' }}>
+          النتيجة الإجمالية
+        </div>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
           <div style={{ flex: 1, background: '#f0ebe0', borderRadius: 8, height: 12, overflow: 'hidden' }}>
             <div style={{
               height: '100%',
-              width: `${(greenCount / total) * 100}%`,
+              width: `${(greenWins / total) * 100}%`,
               background: 'linear-gradient(90deg,#6A8D56,#4a6b38)',
               borderRadius: 8, transition: 'width .5s ease',
             }} />
@@ -459,22 +460,23 @@ function ScorePanel({ board }: { board: HurufSessionState['board'] }) {
           <div style={{ flex: 1, background: '#f0ebe0', borderRadius: 8, height: 12, overflow: 'hidden' }}>
             <div style={{
               height: '100%',
-              width: `${(redCount / total) * 100}%`,
+              width: `${(redWins / total) * 100}%`,
               background: 'linear-gradient(90deg,#E67E22,#B85C0A)',
               borderRadius: 8, transition: 'width .5s ease',
             }} />
           </div>
         </div>
       </div>
-      <div style={{ textAlign: 'center', minWidth: 44 }}>
+      <div style={{ textAlign: 'center', minWidth: 64 }}>
         <div style={{ fontFamily: 'Lalezar, serif', fontSize: 32, color: '#E67E22', lineHeight: 1 }}>
-          {redCount}
+          {redWins}
         </div>
-        <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 11, color: '#999' }}>برتقالي</div>
+        <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 11, color: '#999' }}>فوز برتقالي</div>
       </div>
     </div>
   );
 }
+
 
 /* ─────────────────────────────────────────
    QUESTION OVERLAY (shown when cell active)
@@ -1041,29 +1043,6 @@ export const HurufMain: React.FC = () => {
         </div>
       )}
 
-      <div style={{ maxWidth: 1380, margin: '16px auto 0', padding: '0 24px' }}>
-        <div style={{
-          background: '#fff', borderRadius: 16, border: '2px solid #d6c9a8',
-          padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14,
-          flexWrap: 'wrap',
-        }}>
-          <span style={{ fontFamily: 'Lalezar, serif', fontSize: 20, color: '#2D3436' }}>
-            نتائج الجولات
-          </span>
-          <div style={{
-            background: 'linear-gradient(135deg,#6A8D56,#4a6b38)', color: '#fff',
-            borderRadius: 10, padding: '6px 12px', fontFamily: 'Lalezar, serif', fontSize: 18,
-          }}>
-            الأخضر: {matchWins.green}
-          </div>
-          <div style={{
-            background: 'linear-gradient(135deg,#E67E22,#B85C0A)', color: '#fff',
-            borderRadius: 10, padding: '6px 12px', fontFamily: 'Lalezar, serif', fontSize: 18,
-          }}>
-            البرتقالي: {matchWins.red}
-          </div>
-        </div>
-      </div>
 
       {/* ═══ WINNER BANNER ═══ */}
       {isEnded && state?.winner && (
@@ -1107,7 +1086,7 @@ export const HurufMain: React.FC = () => {
 
         {/* ════ LEFT: BOARD ════ */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {state && <ScorePanel board={state.board} />}
+          <ScorePanel greenWins={matchWins.green} redWins={matchWins.red} />
 
           <div style={{
             background: '#fff', borderRadius: 22,
