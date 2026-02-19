@@ -968,17 +968,9 @@ export const HurufMain: React.FC = () => {
     stopTimer();
 
     try {
-      const preservedWins = {
-        green: state?.matchWins?.green ?? 0,
-        red: state?.matchWins?.red ?? 0,
-      };
-
-      // When creating a brand-new session from the winner screen, carry the latest winner point.
-      if (state?.status === 'ended' && state.winner) {
-        preservedWins[state.winner] += 1;
-      }
-
-      const { sessionId: newSessionId } = await createHurufSession({ matchWins: preservedWins });
+      const { sessionId: newSessionId } = await createHurufSession({
+        matchWins: displayedWins,
+      });
       connectToSessionRef.current?.(newSessionId);
       showToast('↺ لعبة جديدة برمز جلسة جديد!');
     } catch {
@@ -1037,6 +1029,19 @@ export const HurufMain: React.FC = () => {
   const isPlaying = state?.status === 'playing';
   const isEnded   = state?.status === 'ended';
   const hasActive = !!state?.activeCellId;
+
+  const displayedWins = useMemo(() => {
+    const base = {
+      green: state?.matchWins?.green ?? 0,
+      red: state?.matchWins?.red ?? 0,
+    };
+
+    if (state?.status === 'ended' && state.winner) {
+      base[state.winner] += 1;
+    }
+
+    return base;
+  }, [state]);
 
   return (
     <div
@@ -1198,7 +1203,7 @@ export const HurufMain: React.FC = () => {
 
         {/* ════ LEFT: BOARD ════ */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <ScorePanel greenWins={state?.matchWins?.green ?? 0} redWins={state?.matchWins?.red ?? 0} />
+          <ScorePanel greenWins={displayedWins.green} redWins={displayedWins.red} />
 
           <div style={{
             background: '#fff', borderRadius: 22,
