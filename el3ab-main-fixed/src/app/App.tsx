@@ -51,11 +51,7 @@ function App() {
             } />
             
             <Route path="/games/huruf/join" element={
-              
-                <SubscriptionGate gameType="huruf">
                   <HurufJoin />
-                </SubscriptionGate>
-
             } />
             
             <Route path="*" element={<Navigate to="/" replace />} />
