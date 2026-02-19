@@ -162,20 +162,19 @@ export class HurufSessionDO {
   }
 
   private async startGame() {
-    this.clearTimer();
-    this.usedQuestionsByCell.clear();
+    // Pick a random first cell for the current team
+    const availableCells = this.state.board.filter(c => !c.closed);
+    const randomCell = availableCells[Math.floor(Math.random() * availableCells.length)];
 
-    // Rebuild full round state so no owned/closed cell data can leak from previous round.
-    const freshState = this.buildInitialState(this.state.sessionId);
-    const randomCell = freshState.board[Math.floor(Math.random() * freshState.board.length)] ?? null;
-
-    freshState.status = 'playing';
-    freshState.currentTeamTurn = 'green';
-    freshState.activeCellId = randomCell ? randomCell.id : null;
-    freshState.activeQuestion = randomCell ? this.pickQuestionFromBoard(freshState.board, randomCell.id) : null;
-    freshState.updatedAt = Date.now();
-
-    this.state = freshState;
+    this.state.status = 'playing';
+    this.state.winner = null;
+    this.state.currentTeamTurn = 'green';
+    this.state.attemptNo = 1;
+    this.state.stage = 'first';
+    this.state.activeCellId = randomCell ? randomCell.id : null;
+    this.state.activeQuestion = randomCell ? this.pickQuestion(randomCell.id) : null;
+    this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
+    this.state.updatedAt = Date.now();
     await this.persistState();
     this.broadcastState();
   }
@@ -339,8 +338,8 @@ export class HurufSessionDO {
     }
   }
 
-  private pickQuestionFromBoard(board: HurufCell[], cellId: string): HurufQuestion | null {
-    const cell = board.find((item) => item.id === cellId);
+  private pickQuestion(cellId: string): HurufQuestion | null {
+    const cell = this.state.board.find((item) => item.id === cellId);
     if (!cell) return null;
 
     const all =
@@ -359,10 +358,6 @@ export class HurufSessionDO {
     this.usedQuestionsByCell.set(cellId, updatedUsed);
 
     return { ...next, letter: cell.letter };
-  }
-
-  private pickQuestion(cellId: string): HurufQuestion | null {
-    return this.pickQuestionFromBoard(this.state.board, cellId);
   }
 
   private createBoard(): HurufCell[] {
