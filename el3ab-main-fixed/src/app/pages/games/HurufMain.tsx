@@ -869,10 +869,7 @@ export const HurufMain: React.FC = () => {
         if (activeSocketRef.current !== socket.ws) return;
 
         try {
-          const currentWins = {
-            green: stateRef.current?.matchWins?.green ?? 0,
-            red: stateRef.current?.matchWins?.red ?? 0,
-          };
+          const currentWins = getCarriedWins(stateRef.current);
           const { sessionId: newId } = await createHurufSession({ matchWins: currentWins });
           connectToSession(newId);
         } catch {
@@ -934,6 +931,19 @@ export const HurufMain: React.FC = () => {
     toastRef.current = setTimeout(() => setToast(null), 1800);
   };
 
+  const getCarriedWins = (sessionState: HurufSessionState | null) => {
+    const wins = {
+      green: sessionState?.matchWins?.green ?? 0,
+      red: sessionState?.matchWins?.red ?? 0,
+    };
+
+    if (sessionState?.status === 'ended' && sessionState.winner) {
+      wins[sessionState.winner] += 1;
+    }
+
+    return wins;
+  };
+
   const sendEvent = (event: HurufClientEvent, successLabel?: string) => {
     if (!send) {
       showToast('⚠️ لم يتم الاتصال بالخادم بعد');
@@ -978,18 +988,7 @@ export const HurufMain: React.FC = () => {
     }
   };
 
-  const displayedWins = useMemo(() => {
-    const base = {
-      green: state?.matchWins?.green ?? 0,
-      red: state?.matchWins?.red ?? 0,
-    };
-
-    if (state?.status === 'ended' && state.winner) {
-      base[state.winner] += 1;
-    }
-
-    return base;
-  }, [state]);
+  const displayedWins = useMemo(() => getCarriedWins(state), [state]);
 
   const isPlaying = state?.status === 'playing';
   const isEnded   = state?.status === 'ended';
