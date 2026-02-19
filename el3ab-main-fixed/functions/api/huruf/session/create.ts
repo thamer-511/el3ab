@@ -7,6 +7,14 @@ export interface Env {
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
+    const requestedState = (await context.request.json().catch(() => ({}))) as { matchWins?: { green?: number; red?: number } };
+    const initialMatchWins = requestedState.matchWins
+      ? {
+          green: Number(requestedState.matchWins.green ?? 0),
+          red: Number(requestedState.matchWins.red ?? 0),
+        }
+      : undefined;
+
     // Check authentication
     const sessionId = getSessionIdFromRequest(context.request);
 
@@ -33,6 +41,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // Initialize the session inside the Durable Object
     const initResponse = await stub.fetch('https://huruf.internal/init', {
       method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ matchWins: initialMatchWins }),
     });
 
     if (!initResponse.ok) {
