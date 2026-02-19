@@ -339,7 +339,6 @@ export class HurufSessionDO {
     if (won) {
       this.state.status = 'ended';
       this.state.winner = team;
-      this.state.matchWins[team] = (this.state.matchWins[team] ?? 0) + 1;
       this.broadcast({ type: 'GAME_ENDED', winner: team });
     }
 
