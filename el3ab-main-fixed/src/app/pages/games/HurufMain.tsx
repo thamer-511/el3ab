@@ -27,9 +27,9 @@ const HURUF_CSS = `
     --cream:       #FDF8E8;
     --tan:         #F3EAD3;
     --tan2:        #e8dfc4;
-    --red:         #c0392b;
-    --red-dark:    #922b21;
-    --red-glow:    rgba(192,57,43,0.35);
+    --red:         #E67E22;
+    --red-dark:    #B85C0A;
+    --red-glow:    rgba(230,126,34,0.35);
   }
 
   .huruf-root * { box-sizing: border-box; }
@@ -308,7 +308,7 @@ function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
       return { fill: '#6A8D56', innerFill: '#6A8D56', stroke: '#111', text: '#ffffff', ring: false };
     }
     if (cell.closed && cell.owner === 'red') {
-      return { fill: '#c0392b', innerFill: '#c0392b', stroke: '#111', text: '#ffffff', ring: false };
+      return { fill: '#E67E22', innerFill: '#E67E22', stroke: '#111', text: '#ffffff', ring: false };
     }
     if (cell.closed) {
       return { fill: '#e0ddd4', innerFill: '#e0ddd4', stroke: '#111', text: '#777777', ring: false };
@@ -460,14 +460,14 @@ function ScorePanel({ board }: { board: HurufSessionState['board'] }) {
             <div style={{
               height: '100%',
               width: `${(redCount / total) * 100}%`,
-              background: 'linear-gradient(90deg,#c0392b,#922b21)',
+              background: 'linear-gradient(90deg,#E67E22,#B85C0A)',
               borderRadius: 8, transition: 'width .5s ease',
             }} />
           </div>
         </div>
       </div>
       <div style={{ textAlign: 'center', minWidth: 44 }}>
-        <div style={{ fontFamily: 'Lalezar, serif', fontSize: 32, color: '#c0392b', lineHeight: 1 }}>
+        <div style={{ fontFamily: 'Lalezar, serif', fontSize: 32, color: '#E67E22', lineHeight: 1 }}>
           {redCount}
         </div>
         <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 11, color: '#999' }}>برتقالي</div>
@@ -504,11 +504,11 @@ function QuestionOverlay({
   const stageBg = stage === 'first' ? '#6A8D56' : '#E08C36';
   const stageLabel = stage === 'first' ? 'الفرصة الأولى' : 'فرصة الفريق الآخر';
   const lockedByLabel = lockedBy === 'green' ? 'الفريق الأخضر' : lockedBy === 'red' ? 'الفريق البرتقالي' : null;
-  const lockedColor = lockedBy === 'green' ? '#6A8D56' : '#c0392b';
+  const lockedColor = lockedBy === 'green' ? '#6A8D56' : '#E67E22';
   const timerPercent = timer / TIMER_DURATION;
   const timerColor =
     timerPercent > 0.5 ? '#6A8D56' :
-    timerPercent > 0.25 ? '#E08C36' : '#c0392b';
+    timerPercent > 0.25 ? '#E08C36' : '#E67E22';
 
   return (
     <div className="question-overlay">
@@ -609,8 +609,8 @@ function QuestionOverlay({
             disabled={!locked}
             onClick={onWrong}
             style={{
-              background: locked ? 'linear-gradient(135deg,#c0392b,#922b21)' : '#ececec',
-              borderColor: locked ? '#c0392b' : '#ddd',
+              background: locked ? 'linear-gradient(135deg,#E67E22,#B85C0A)' : '#ececec',
+              borderColor: locked ? '#E67E22' : '#ddd',
               color: locked ? '#fff' : '#bbb',
             }}
           >
@@ -709,7 +709,7 @@ function QrLobby({
             
           </div>
           <div style={{
-            flex: 1, background: '#c0392b18', border: '2px solid #c0392b',
+            flex: 1, background: '#E67E2218', border: '2px solid #E67E22',
             borderRadius: 12, padding: '10px 14px', textAlign: 'center',
           }}>
             
@@ -718,7 +718,7 @@ function QrLobby({
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 28 }}>
           <QrCard accent="#6A8D56" label="الفريق الأخضر" link={greenLink} />
-          <QrCard accent="#c0392b" label="الفريق البرتقالي"  link={redLink}   />
+          <QrCard accent="#E67E22" label="الفريق البرتقالي"  link={redLink}   />
         </div>
 
         <div style={{ display: 'flex', gap: 12 }}>
@@ -877,11 +877,11 @@ export const HurufMain: React.FC = () => {
       }}>
         <div style={{
           maxWidth: 420, background: '#fff', borderRadius: 22,
-          border: '3px solid #c0392b', boxShadow: '8px 8px 0 #c0392b',
+          border: '3px solid #E67E22', boxShadow: '8px 8px 0 #E67E22',
           padding: 44, textAlign: 'center',
         }}>
           <span style={{ fontSize: 54 }}>⚠️</span>
-          <h2 style={{ fontFamily: 'Lalezar, serif', fontSize: 28, color: '#c0392b', margin: '14px 0 10px' }}>
+          <h2 style={{ fontFamily: 'Lalezar, serif', fontSize: 28, color: '#E67E22', margin: '14px 0 10px' }}>
             عذراً!
           </h2>
           <p style={{ fontFamily: 'Cairo, sans-serif', color: '#666', marginBottom: 24 }}>{error}</p>
@@ -956,7 +956,7 @@ export const HurufMain: React.FC = () => {
             </button>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 7,
-              background: isPlaying ? '#6A8D56' : isEnded ? '#c0392b' : '#555',
+              background: isPlaying ? '#6A8D56' : isEnded ? '#E67E22' : '#555',
               padding: '5px 16px', borderRadius: 30,
               fontFamily: 'Lalezar, serif', fontSize: 14, color: '#fff',
             }}>
@@ -1029,7 +1029,7 @@ export const HurufMain: React.FC = () => {
             style={{
               background: state.winner === 'green'
                 ? 'linear-gradient(135deg,#6A8D56,#4a6b38)'
-                : 'linear-gradient(135deg,#c0392b,#922b21)',
+                : 'linear-gradient(135deg,#E67E22,#B85C0A)',
               borderRadius: 18, padding: '22px 36px',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16,
               boxShadow: '0 8px 32px rgba(0,0,0,.2)',
@@ -1058,9 +1058,7 @@ export const HurufMain: React.FC = () => {
       {/* ═══ BODY ═══ */}
       <div style={{
         maxWidth: 1380, margin: '28px auto 0', padding: '0 24px',
-        display: 'grid',
-        gridTemplateColumns: '1fr 300px',
-        gap: 26, alignItems: 'start',
+        display: 'block',
       }}>
 
         {/* ════ LEFT: BOARD ════ */}
@@ -1088,9 +1086,9 @@ export const HurufMain: React.FC = () => {
                   </span>
                   <span style={{
                     fontFamily: 'Lalezar, serif', fontSize: 16,
-                    color: state.currentTeamTurn === 'green' ? '#6A8D56' : '#c0392b',
+                    color: state.currentTeamTurn === 'green' ? '#6A8D56' : '#E67E22',
                   }}>
-                    {state.currentTeamTurn === 'green' ? '🟢 الأخضر' : '🔴 البرتقالي'}
+                    {state.currentTeamTurn === 'green' ? '🟢 الأخضر' : '🟠 البرتقالي'}
                   </span>
                 </div>
               )}
@@ -1117,7 +1115,7 @@ export const HurufMain: React.FC = () => {
             }}>
               {[
                 { label: 'أخضر', bg: 'linear-gradient(135deg,#6A8D56,#4a6b38)' },
-                { label: 'برتقالي',  bg: 'linear-gradient(135deg,#c0392b,#922b21)' },
+                { label: 'برتقالي',  bg: 'linear-gradient(135deg,#E67E22,#B85C0A)' },
                 { label: 'نشطة',  bg: 'linear-gradient(135deg,#fff4d6,#ffe099)', border: '2px solid #E08C36' },
                 { label: 'متاحة', bg: '#fffcf0', border: '2px solid #d6c9a8' },
               ].map(({ label, bg, border }) => (
@@ -1147,7 +1145,6 @@ export const HurufMain: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
   );
 };
 
