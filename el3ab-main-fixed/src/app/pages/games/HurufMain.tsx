@@ -1147,7 +1147,6 @@ export const HurufMain: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
   );
 };
 
