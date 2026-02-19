@@ -1,7 +1,17 @@
 import type { HurufClientEvent, HurufServerEvent } from '../../../shared/huruf/types';
 
-export const createHurufSession = async (): Promise<{ sessionId: string }> => {
-  const response = await fetch('/api/huruf/session/create', { method: 'POST' });
+export type HurufSendResult = 'sent' | 'queued' | 'dropped';
+
+export interface CreateHurufSessionPayload {
+  matchWins?: { green: number; red: number };
+}
+
+export const createHurufSession = async (payload?: CreateHurufSessionPayload): Promise<{ sessionId: string }> => {
+  const response = await fetch('/api/huruf/session/create', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
   if (!response.ok) {
     throw new Error('Failed to create Huruf session');
   }
@@ -32,15 +42,18 @@ export const connectHurufSocket = (sessionId: string, onEvent: (event: HurufServ
 
   ws.addEventListener('open', flushPending);
 
-  const send = (event: HurufClientEvent) => {
+  const send = (event: HurufClientEvent): HurufSendResult => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(event));
-      return;
+      return 'sent';
     }
 
     if (ws.readyState === WebSocket.CONNECTING) {
       pendingEvents.push(event);
+      return 'queued';
     }
+
+    return 'dropped';
   };
 
   return { ws, send };

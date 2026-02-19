@@ -40,7 +40,8 @@ export class HurufSessionDO {
     const url = new URL(request.url);
 
     if (url.pathname.endsWith('/init') && request.method === 'POST') {
-      await this.restoreOrInit();
+      const initPayload = (await request.json().catch(() => ({}))) as { matchWins?: { green?: number; red?: number } };
+      await this.restoreOrInit(initPayload.matchWins);
       return new Response(JSON.stringify({ ok: true, sessionId: this.state.sessionId }), {
         headers: { 'content-type': 'application/json' },
       });
@@ -75,7 +76,7 @@ export class HurufSessionDO {
     };
   }
 
-  private async restoreOrInit() {
+  private async restoreOrInit(initialWins?: { green?: number; red?: number }) {
     const saved = await this.stateStore.storage.get<HurufSessionState>('session_state');
     if (saved) {
       this.state = {
@@ -89,6 +90,12 @@ export class HurufSessionDO {
       return;
     }
     this.state = this.buildInitialState();
+    if (initialWins) {
+      this.state.matchWins = {
+        green: Number(initialWins.green ?? 0),
+        red: Number(initialWins.red ?? 0),
+      };
+    }
     await this.persistState();
   }
 
@@ -173,9 +180,15 @@ export class HurufSessionDO {
     this.clearTimer();
     this.usedQuestionsByCell.clear();
 
-    // Rebuild full round state so no owned/closed cell data can leak from previous round.
+    const previousWins = {
+      green: this.state.matchWins?.green ?? 0,
+      red: this.state.matchWins?.red ?? 0,
+    };
+
+    // Rebuild round state while preserving cumulative wins across rounds.
     const freshState = this.buildInitialState(this.state.sessionId);
-    freshState.matchWins = this.state.matchWins;
+    freshState.board = this.resetBoardCells(this.state.board);
+    freshState.matchWins = previousWins;
     const randomCell = freshState.board[Math.floor(Math.random() * freshState.board.length)] ?? null;
 
     freshState.status = 'playing';
@@ -326,7 +339,6 @@ export class HurufSessionDO {
     if (won) {
       this.state.status = 'ended';
       this.state.winner = team;
-      this.state.matchWins[team] += 1;
       this.broadcast({ type: 'GAME_ENDED', winner: team });
     }
 
@@ -373,6 +385,14 @@ export class HurufSessionDO {
 
   private pickQuestion(cellId: string): HurufQuestion | null {
     return this.pickQuestionFromBoard(this.state.board, cellId);
+  }
+
+  private resetBoardCells(board: HurufCell[]): HurufCell[] {
+    return board.map((cell) => ({
+      ...cell,
+      owner: null,
+      closed: false,
+    }));
   }
 
   private createBoard(): HurufCell[] {
