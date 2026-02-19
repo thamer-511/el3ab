@@ -6,6 +6,7 @@ import type {
   Team,
 } from '../../../../shared/huruf/types';
 import { connectHurufSocket, createHurufSession } from '../../lib/huruf';
+import type { HurufSendResult } from '../../lib/huruf';
 
 /* ─────────────────────────────────────────
    CONSTANTS
@@ -782,7 +783,7 @@ export const HurufMain: React.FC = () => {
 
   const [sessionId, setSessionId]   = useState('');
   const [state, setState]           = useState<HurufSessionState | null>(null);
-  const [send, setSend]             = useState<((e: any) => void) | null>(null);
+  const [send, setSend]             = useState<((e: HurufClientEvent) => HurufSendResult) | null>(null);
   const [error, setError]           = useState<string | null>(null);
   const [loading, setLoading]       = useState(true);
   const [toast, setToast]           = useState<string | null>(null);
@@ -915,7 +916,12 @@ export const HurufMain: React.FC = () => {
       return false;
     }
 
-    send(event);
+    const result = send(event);
+    if (result === 'dropped') {
+      showToast('⚠️ انقطع الاتصال، حدّث الصفحة أو أعد فتح اللعبة');
+      return false;
+    }
+
     if (successLabel) showToast(successLabel);
     return true;
   };
