@@ -1,5 +1,4 @@
 import type {
-  AttemptNo,
   BuzzStage,
   HurufCell,
   HurufClientEvent,
@@ -13,12 +12,25 @@ import questionBank from '../../shared/huruf/questions.ar.json';
 type SocketMeta = { role: 'main' | 'mobile'; team?: Team };
 
 const GRID_SIZE = 6;
-const AVAILABLE_LETTERS = Object.keys(questionBank as Record<string, unknown>);
+const TIMER_DURATION_MS = 10000; // 10 seconds
+
+// All available letters
+const ALL_LETTERS = ['ا', 'ب', 'ت', 'ث', 'ج', 'ح', 'د', 'ر', 'س', 'ش', 'ع', 'ق', 'ك', 'م', 'ن', 'و', 'ي'];
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 export class HurufSessionDO {
   private readonly sockets = new Map<WebSocket, SocketMeta>();
   private state: HurufSessionState;
   private readonly usedQuestionsByCell = new Map<string, string[]>();
+  private timerHandle: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly stateStore: DurableObjectState) {
     this.state = this.buildInitialState();
@@ -54,7 +66,7 @@ export class HurufSessionDO {
       currentTeamTurn: 'green',
       activeCellId: null,
       activeQuestion: null,
-      buzzer: { locked: false, lockedBy: null },
+      buzzer: { locked: false, lockedBy: null, timerStart: null },
       attemptNo: 1,
       stage: 'first',
       winner: null,
@@ -82,7 +94,9 @@ export class HurufSessionDO {
         const payload = JSON.parse(String(event.data)) as HurufClientEvent;
         await this.handleEvent(socket, payload);
       } catch {
-        socket.send(JSON.stringify({ type: 'ERROR', message: 'Malformed event payload' } satisfies HurufServerEvent));
+        socket.send(
+          JSON.stringify({ type: 'ERROR', message: 'Malformed event payload' } satisfies HurufServerEvent)
+        );
       }
     });
 
@@ -93,18 +107,38 @@ export class HurufSessionDO {
 
   private async handleEvent(socket: WebSocket, event: HurufClientEvent) {
     switch (event.type) {
-      case 'JOIN': this.handleJoin(socket, event); return;
-      case 'BUZZ_REQUEST': await this.handleBuzzRequest(event.team); return;
-      case 'MAIN_START_GAME': await this.startGame(); return;
-      case 'MAIN_SELECT_CELL': await this.selectCell(event.cellId); return;
-      case 'MAIN_MARK_WRONG': await this.markWrong(); return;
-      case 'MAIN_MARK_CORRECT': await this.markCorrect(); return;
-      case 'MAIN_RESET_BUZZER': await this.resetBuzzer(); return;
-      case 'MAIN_NEW_QUESTION': await this.newQuestion(); return;
+      case 'JOIN':
+        this.handleJoin(socket, event);
+        return;
+      case 'BUZZ_REQUEST':
+        await this.handleBuzzRequest(event.team);
+        return;
+      case 'MAIN_START_GAME':
+        await this.startGame();
+        return;
+      case 'MAIN_SELECT_CELL':
+        await this.selectCell(event.cellId);
+        return;
+      case 'MAIN_MARK_WRONG':
+        await this.markWrong();
+        return;
+      case 'MAIN_MARK_CORRECT':
+        await this.markCorrect();
+        return;
+      case 'MAIN_RESET_BUZZER':
+        await this.resetBuzzer();
+        return;
+      case 'MAIN_NEW_QUESTION':
+        await this.newQuestion();
+        return;
+      case 'TIMER_EXPIRED':
+        await this.handleTimerExpired(event.team);
+        return;
       case 'PING':
         socket.send(JSON.stringify({ type: 'SESSION_STATE', state: this.state } satisfies HurufServerEvent));
         return;
-      default: return;
+      default:
+        return;
     }
   }
 
@@ -112,7 +146,12 @@ export class HurufSessionDO {
     if (event.role === 'mobile' && event.team) {
       for (const [peer, meta] of this.sockets.entries()) {
         if (peer !== socket && meta.role === 'mobile' && meta.team === event.team) {
-          peer.send(JSON.stringify({ type: 'ERROR', message: 'تم استبدال هذا الجهاز بجهاز آخر لنفس الفريق.' } satisfies HurufServerEvent));
+          peer.send(
+            JSON.stringify({
+              type: 'ERROR',
+              message: 'تم استبدال هذا الجهاز بجهاز آخر لنفس الفريق.',
+            } satisfies HurufServerEvent)
+          );
           peer.close(4001, 'Replaced by newer device');
           this.sockets.delete(peer);
         }
@@ -123,38 +162,34 @@ export class HurufSessionDO {
   }
 
   private async startGame() {
+    // Pick a random first cell for the current team
+    const availableCells = this.state.board.filter(c => !c.closed);
+    const randomCell = availableCells[Math.floor(Math.random() * availableCells.length)];
+
     this.state.status = 'playing';
     this.state.winner = null;
     this.state.currentTeamTurn = 'green';
     this.state.attemptNo = 1;
     this.state.stage = 'first';
-    this.state.activeCellId = null;
-    this.state.activeQuestion = null;
-    this.state.buzzer = { locked: false, lockedBy: null };
+    this.state.activeCellId = randomCell ? randomCell.id : null;
+    this.state.activeQuestion = randomCell ? this.pickQuestion(randomCell.id) : null;
+    this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
     this.state.updatedAt = Date.now();
     await this.persistState();
     this.broadcastState();
-
-    // Auto-select random first cell
-    const availableCells = this.state.board.filter(c => !c.closed);
-    if (availableCells.length > 0) {
-      const randomCell = availableCells[Math.floor(Math.random() * availableCells.length)];
-      await this.selectCell(randomCell.id);
-    }
   }
 
   private async selectCell(cellId: string) {
     if (this.state.status !== 'playing') return;
     const cell = this.state.board.find((c) => c.id === cellId);
     if (!cell || cell.closed) return;
-
-    // Prevent changing cell once selected
+    // Once a cell is selected, prevent changing to another
     if (this.state.activeCellId && this.state.activeCellId !== cellId) return;
 
     this.state.activeCellId = cellId;
     this.state.attemptNo = 1;
     this.state.stage = 'first';
-    this.state.buzzer = { locked: false, lockedBy: null };
+    this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
 
     const question = this.pickQuestion(cellId);
     if (question) {
@@ -173,15 +208,20 @@ export class HurufSessionDO {
     if (!question) return;
 
     this.state.activeQuestion = question;
-    this.state.buzzer = { locked: false, lockedBy: null };
+    this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
     this.state.updatedAt = Date.now();
     await this.persistState();
-    this.broadcast({ type: 'QUESTION_CHANGED', cellId: this.state.activeCellId, question });
+    this.broadcast({
+      type: 'QUESTION_CHANGED',
+      cellId: this.state.activeCellId,
+      question,
+    });
     this.broadcastState();
   }
 
   private async resetBuzzer() {
-    this.state.buzzer = { locked: false, lockedBy: null };
+    this.clearTimer();
+    this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
     this.state.updatedAt = Date.now();
     await this.persistState();
     this.broadcast({ type: 'BUZZ_RESET' });
@@ -192,34 +232,65 @@ export class HurufSessionDO {
     if (this.state.status !== 'playing') return;
     if (this.state.buzzer.locked) return;
 
-    this.state.buzzer = { locked: true, lockedBy: team };
-    this.state.updatedAt = Date.now();
+    const now = Date.now();
+    this.state.buzzer = { locked: true, lockedBy: team, timerStart: now };
+    this.state.updatedAt = now;
     await this.persistState();
     this.broadcast({ type: 'BUZZ_LOCKED', team });
+    this.broadcast({ type: 'TIMER_START', team, durationMs: TIMER_DURATION_MS });
     this.broadcastState();
+
+    // Server-side timer as backup
+    this.clearTimer();
+    this.timerHandle = setTimeout(async () => {
+      await this.handleTimerExpired(team);
+    }, TIMER_DURATION_MS + 500);
+  }
+
+  private async handleTimerExpired(team: Team) {
+    if (!this.state.buzzer.locked || this.state.buzzer.lockedBy !== team) return;
+
+    this.clearTimer();
+
+    if (this.state.stage === 'first') {
+      // Give chance to the other team
+      const otherTeam: Team = team === 'green' ? 'red' : 'green';
+      this.state.stage = 'other';
+      this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
+      this.state.updatedAt = Date.now();
+      await this.persistState();
+      this.broadcast({ type: 'TIMER_EXPIRED_SERVER', nextTeam: otherTeam });
+      this.broadcastState();
+    } else {
+      // second team also failed - move to next turn
+      this.state.stage = 'first';
+      this.state.activeCellId = null;
+      this.state.activeQuestion = null;
+      this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
+      // Switch turn
+      this.state.currentTeamTurn = team === 'green' ? 'red' : 'green';
+      this.state.updatedAt = Date.now();
+      await this.persistState();
+      this.broadcast({ type: 'TIMER_EXPIRED_SERVER', nextTeam: null });
+      this.broadcastState();
+    }
   }
 
   private async markWrong() {
     if (!this.state.activeCellId) return;
+    this.clearTimer();
 
     if (this.state.stage === 'first') {
+      const otherTeam: Team = this.state.buzzer.lockedBy === 'green' ? 'red' : 'green';
       this.state.stage = 'other';
-      this.state.buzzer = { locked: false, lockedBy: null };
-    } else if (this.state.stage === 'other') {
-      this.state.stage = 'final';
-      this.state.buzzer = { locked: false, lockedBy: null };
+      this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
     } else {
-      // final stage failed - new attempt
-      if (this.state.attemptNo === 1) {
-        this.state.attemptNo = 2 as AttemptNo;
-      }
+      // Both teams failed - next turn
       this.state.stage = 'first';
-      this.state.buzzer = { locked: false, lockedBy: null };
-      const question = this.pickQuestion(this.state.activeCellId);
-      if (question) {
-        this.state.activeQuestion = question;
-        this.broadcast({ type: 'QUESTION_CHANGED', cellId: this.state.activeCellId, question });
-      }
+      this.state.activeCellId = null;
+      this.state.activeQuestion = null;
+      this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
+      this.state.currentTeamTurn = this.state.currentTeamTurn === 'green' ? 'red' : 'green';
     }
 
     this.state.updatedAt = Date.now();
@@ -231,6 +302,8 @@ export class HurufSessionDO {
     const team = this.state.buzzer.lockedBy;
     const activeCellId = this.state.activeCellId;
     if (!team || !activeCellId) return;
+
+    this.clearTimer();
 
     const cell = this.state.board.find((item) => item.id === activeCellId);
     if (!cell || cell.closed) return;
@@ -249,7 +322,7 @@ export class HurufSessionDO {
     this.state.currentTeamTurn = team;
     this.state.activeCellId = null;
     this.state.activeQuestion = null;
-    this.state.buzzer = { locked: false, lockedBy: null };
+    this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
     this.state.attemptNo = 1;
     this.state.stage = 'first';
     this.state.updatedAt = Date.now();
@@ -258,11 +331,19 @@ export class HurufSessionDO {
     this.broadcastState();
   }
 
+  private clearTimer() {
+    if (this.timerHandle !== null) {
+      clearTimeout(this.timerHandle);
+      this.timerHandle = null;
+    }
+  }
+
   private pickQuestion(cellId: string): HurufQuestion | null {
     const cell = this.state.board.find((item) => item.id === cellId);
     if (!cell) return null;
 
-    const all = (questionBank as Record<string, Array<{ id: string; prompt: string; answer: string }>>)[cell.letter] ?? [];
+    const all =
+      (questionBank as Record<string, Array<{ id: string; prompt: string; answer: string }>>)[cell.letter] ?? [];
     if (!all.length) return null;
 
     const used = this.usedQuestionsByCell.get(cellId) ?? [];
@@ -279,22 +360,34 @@ export class HurufSessionDO {
   }
 
   private createBoard(): HurufCell[] {
-    // Shuffle available letters randomly
-    const shuffled = [...AVAILABLE_LETTERS].sort(() => Math.random() - 0.5);
+    // Create a random assignment of letters to cells
+    const totalCells = GRID_SIZE * GRID_SIZE;
+    const lettersPool: string[] = [];
+    while (lettersPool.length < totalCells) {
+      lettersPool.push(...ALL_LETTERS);
+    }
+    const shuffledLetters = shuffle(lettersPool).slice(0, totalCells);
 
     const cells: HurufCell[] = [];
     for (let row = 0; row < GRID_SIZE; row++) {
       for (let col = 0; col < GRID_SIZE; col++) {
-        const idx = row * GRID_SIZE + col;
         const id = `${row}-${col}`;
-        const letter = shuffled[idx % shuffled.length];
+        const letter = shuffledLetters[row * GRID_SIZE + col];
         cells.push({ id, letter, owner: null, closed: false, neighbors: [] });
       }
     }
 
-    // Hex offset grid neighbors
-    const offsetsEven = [[-1, -1], [-1, 0], [0, -1], [0, 1], [1, -1], [1, 0]];
-    const offsetsOdd  = [[-1,  0], [-1, 1], [0, -1], [0, 1], [1,  0], [1, 1]];
+    // Pointy-top hex neighbors
+    const offsetsEven = [
+      [-1, -1], [-1, 0],
+      [0, -1],  [0, 1],
+      [1, -1],  [1, 0],
+    ];
+    const offsetsOdd = [
+      [-1, 0],  [-1, 1],
+      [0, -1],  [0, 1],
+      [1, 0],   [1, 1],
+    ];
 
     for (let row = 0; row < GRID_SIZE; row++) {
       for (let col = 0; col < GRID_SIZE; col++) {
@@ -310,9 +403,12 @@ export class HurufSessionDO {
     return cells;
   }
 
+  /**
+   * Win condition:
+   * Green team: must connect TOP row to BOTTOM row
+   * Red team: must connect LEFT column to RIGHT column
+   */
   private checkWin(team: Team): boolean {
-    // Green: top row (row 0) → bottom row (row 5)
-    // Red:   left col (col 0) → right col (col 5)
     const owned = new Map(this.state.board.map((cell) => [cell.id, cell.owner]));
     const queue: string[] = [];
     const visited = new Set<string>();
@@ -321,6 +417,8 @@ export class HurufSessionDO {
       if (owned.get(cell.id) !== team) continue;
       const row = Number(cell.id.split('-')[0]);
       const col = Number(cell.id.split('-')[1]);
+      // Green: starts from top row (row === 0)
+      // Red: starts from left column (col === 0)
       const starts = team === 'green' ? row === 0 : col === 0;
       if (starts) {
         queue.push(cell.id);
@@ -332,6 +430,7 @@ export class HurufSessionDO {
       const id = queue.shift() as string;
       const row = Number(id.split('-')[0]);
       const col = Number(id.split('-')[1]);
+      // Green: reaches bottom row; Red: reaches right column
       const reached = team === 'green' ? row === GRID_SIZE - 1 : col === GRID_SIZE - 1;
       if (reached) return true;
 
