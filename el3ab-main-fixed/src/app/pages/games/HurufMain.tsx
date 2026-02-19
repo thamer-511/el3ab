@@ -757,10 +757,12 @@ export const HurufMain: React.FC = () => {
   const [timer, setTimer]           = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [timerTeam, setTimerTeam]   = useState<Team | null>(null);
+  const [matchWins, setMatchWins]   = useState<{ green: number; red: number }>({ green: 0, red: 0 });
 
   const toastRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerStartRef = useRef<number>(0);
+  const prevStatusRef = useRef<HurufSessionState['status'] | null>(null);
 
   const startTimer = (team: Team) => {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
@@ -796,6 +798,18 @@ export const HurufMain: React.FC = () => {
         setSessionId(id);
         const socket = connectHurufSocket(id, (event: HurufServerEvent) => {
           if (event.type === 'SESSION_STATE') {
+            if (
+              event.state.status === 'ended' &&
+              event.state.winner &&
+              prevStatusRef.current !== 'ended'
+            ) {
+              const winner = event.state.winner;
+              setMatchWins((prev) => ({
+                ...prev,
+                [winner]: prev[winner] + 1,
+              }));
+            }
+            prevStatusRef.current = event.state.status;
             setState(event.state);
             // Stop timer if buzzer was released
             if (!event.state.buzzer.locked) stopTimer();
@@ -851,6 +865,12 @@ export const HurufMain: React.FC = () => {
     showToast('▶ بدأت اللعبة!');
   };
   const handleLobbySkip = () => setShowLobby(false);
+
+  const handlePlayAgain = () => {
+    stopTimer();
+    send?.({ type: 'MAIN_START_GAME' });
+    showToast('↺ لعبة جديدة!');
+  };
 
   /* ── Loading ── */
   if (loading) {
@@ -1021,6 +1041,30 @@ export const HurufMain: React.FC = () => {
         </div>
       )}
 
+      <div style={{ maxWidth: 1380, margin: '16px auto 0', padding: '0 24px' }}>
+        <div style={{
+          background: '#fff', borderRadius: 16, border: '2px solid #d6c9a8',
+          padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14,
+          flexWrap: 'wrap',
+        }}>
+          <span style={{ fontFamily: 'Lalezar, serif', fontSize: 20, color: '#2D3436' }}>
+            نتائج الجولات
+          </span>
+          <div style={{
+            background: 'linear-gradient(135deg,#6A8D56,#4a6b38)', color: '#fff',
+            borderRadius: 10, padding: '6px 12px', fontFamily: 'Lalezar, serif', fontSize: 18,
+          }}>
+            الأخضر: {matchWins.green}
+          </div>
+          <div style={{
+            background: 'linear-gradient(135deg,#E67E22,#B85C0A)', color: '#fff',
+            borderRadius: 10, padding: '6px 12px', fontFamily: 'Lalezar, serif', fontSize: 18,
+          }}>
+            البرتقالي: {matchWins.red}
+          </div>
+        </div>
+      </div>
+
       {/* ═══ WINNER BANNER ═══ */}
       {isEnded && state?.winner && (
         <div style={{ maxWidth: 1380, margin: '24px auto 0', padding: '0 24px' }}>
@@ -1041,7 +1085,7 @@ export const HurufMain: React.FC = () => {
             </span>
             <span style={{ fontSize: 36 }}>🏆</span>
             <button
-              onClick={() => window.location.reload()}
+              onClick={handlePlayAgain}
               style={{
                 marginRight: 'auto',
                 background: 'rgba(255,255,255,.2)', border: '2px solid rgba(255,255,255,.4)',
