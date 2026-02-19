@@ -388,8 +388,11 @@ export class HurufSessionDO {
   }
 
   private resetBoardCells(board: HurufCell[]): HurufCell[] {
-    return board.map((cell) => ({
+    const shuffledLetters = shuffle(board.map((cell) => cell.letter));
+
+    return board.map((cell, index) => ({
       ...cell,
+      letter: shuffledLetters[index] ?? cell.letter,
       owner: null,
       closed: false,
     }));
