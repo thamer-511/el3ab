@@ -961,6 +961,12 @@ export const HurufMain: React.FC = () => {
         green: state?.matchWins?.green ?? 0,
         red: state?.matchWins?.red ?? 0,
       };
+
+      // When creating a brand-new session from the winner screen, carry the latest winner point.
+      if (state?.status === 'ended' && state.winner) {
+        preservedWins[state.winner] += 1;
+      }
+
       const { sessionId: newSessionId } = await createHurufSession({ matchWins: preservedWins });
       connectToSessionRef.current?.(newSessionId);
       showToast('↺ لعبة جديدة برمز جلسة جديد!');
