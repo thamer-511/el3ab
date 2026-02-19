@@ -3,27 +3,310 @@ import { useSearchParams } from 'react-router';
 import type { HurufServerEvent, Team } from '../../../../shared/huruf/types';
 import { connectHurufSocket } from '../../lib/huruf';
 
-type ViewState = 'READY' | 'YOU_BUZZED' | 'OTHER_TEAM_BUZZED' | 'LOCKED' | 'DISCONNECTED';
+type ViewState = 'READY' | 'YOU_BUZZED' | 'OTHER_TEAM_BUZZED' | 'DISCONNECTED' | 'WAITING';
+
+const TIMER_DURATION = 10; // seconds
+
+const JOIN_CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Lalezar&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  
+  .join-root {
+    min-height: 100vh;
+    direction: rtl;
+    font-family: 'Cairo', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    transition: background 0.4s ease;
+  }
+
+  .join-root.green-theme {
+    background: linear-gradient(160deg, #1a2e1a 0%, #2d4a2d 50%, #1a3a1a 100%);
+  }
+
+  .join-root.red-theme {
+    background: linear-gradient(160deg, #2e1a1a 0%, #4a2d2d 50%, #3a1a1a 100%);
+  }
+
+  .join-root.buzzing-green {
+    background: linear-gradient(160deg, #2a4e2a 0%, #4a7a4a 50%, #2a4e2a 100%);
+    animation: greenPulse 0.6s ease infinite alternate;
+  }
+
+  .join-root.buzzing-red {
+    background: linear-gradient(160deg, #4e2a2a 0%, #7a4a4a 50%, #4e2a2a 100%);
+    animation: redPulse 0.6s ease infinite alternate;
+  }
+
+  @keyframes greenPulse {
+    from { filter: brightness(1); }
+    to { filter: brightness(1.3); }
+  }
+
+  @keyframes redPulse {
+    from { filter: brightness(1); }
+    to { filter: brightness(1.3); }
+  }
+
+  .team-badge {
+    font-family: 'Lalezar', serif;
+    font-size: 18px;
+    padding: 8px 24px;
+    border-radius: 40px;
+    margin-bottom: 32px;
+    border: 2px solid rgba(255,255,255,0.3);
+    color: rgba(255,255,255,0.85);
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+  }
+
+  .buzz-btn {
+    position: relative;
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    font-family: 'Lalezar', serif;
+    font-size: 48px;
+    color: #fff;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.2s;
+    outline: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .buzz-btn:active:not(:disabled) {
+    transform: scale(0.93) !important;
+  }
+
+  .buzz-btn:disabled {
+    cursor: not-allowed;
+    filter: saturate(0.4) brightness(0.7);
+    transform: scale(0.95);
+  }
+
+  .buzz-btn.green-btn {
+    background: radial-gradient(circle at 35% 35%, #8ab56a, #4a7a2a);
+    box-shadow: 0 12px 40px rgba(106,180,70,0.5), 0 4px 0 #2a5a10, inset 0 -4px 0 rgba(0,0,0,0.2);
+  }
+
+  .buzz-btn.green-btn:hover:not(:disabled) {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 60px rgba(106,180,70,0.65), 0 8px 0 #2a5a10, inset 0 -4px 0 rgba(0,0,0,0.2);
+  }
+
+  .buzz-btn.green-btn.buzzing {
+    box-shadow: 0 0 0 20px rgba(106,180,70,0.3), 0 0 0 40px rgba(106,180,70,0.15), 0 12px 40px rgba(106,180,70,0.5);
+    animation: buzzScale 0.3s ease infinite alternate;
+  }
+
+  .buzz-btn.red-btn {
+    background: radial-gradient(circle at 35% 35%, #d66060, #8a2020);
+    box-shadow: 0 12px 40px rgba(200,50,50,0.5), 0 4px 0 #5a1010, inset 0 -4px 0 rgba(0,0,0,0.2);
+  }
+
+  .buzz-btn.red-btn:hover:not(:disabled) {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 60px rgba(200,50,50,0.65), 0 8px 0 #5a1010, inset 0 -4px 0 rgba(0,0,0,0.2);
+  }
+
+  .buzz-btn.red-btn.buzzing {
+    box-shadow: 0 0 0 20px rgba(200,50,50,0.3), 0 0 0 40px rgba(200,50,50,0.15), 0 12px 40px rgba(200,50,50,0.5);
+    animation: buzzScale 0.3s ease infinite alternate;
+  }
+
+  @keyframes buzzScale {
+    from { transform: scale(1); }
+    to { transform: scale(1.05); }
+  }
+
+  .status-text {
+    margin-top: 28px;
+    font-family: 'Cairo', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    text-align: center;
+    color: rgba(255,255,255,0.9);
+    min-height: 32px;
+  }
+
+  .timer-ring {
+    position: absolute;
+    top: -12px; left: -12px;
+    width: calc(100% + 24px);
+    height: calc(100% + 24px);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .timer-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Lalezar', serif;
+    font-size: 48px;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    pointer-events: none;
+  }
+
+  .other-buzz {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 32px 40px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 24px;
+    border: 2px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+  }
+
+  .other-buzz .emoji { font-size: 48px; }
+  .other-buzz .msg {
+    font-family: 'Lalezar', serif;
+    font-size: 24px;
+    color: rgba(255,255,255,0.8);
+    text-align: center;
+  }
+
+  .disconnected-msg {
+    color: rgba(255,255,255,0.5);
+    font-family: 'Cairo', sans-serif;
+    font-size: 15px;
+    margin-top: 12px;
+    text-align: center;
+  }
+
+  .timer-display {
+    font-family: 'Lalezar', serif;
+    font-size: 72px;
+    color: #fff;
+    text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    line-height: 1;
+  }
+
+  .timer-display.urgent {
+    color: #ffcc44;
+    animation: urgentBlink 0.5s ease infinite alternate;
+  }
+
+  @keyframes urgentBlink {
+    from { opacity: 1; }
+    to { opacity: 0.6; }
+  }
+`;
+
+function injectJoinCSS() {
+  const id = 'huruf-join-css';
+  if (typeof document === 'undefined' || document.getElementById(id)) return;
+  const s = document.createElement('style');
+  s.id = id;
+  s.textContent = JOIN_CSS;
+  document.head.appendChild(s);
+}
+
+// SVG Timer Ring
+function TimerRing({ progress, color }: { progress: number; color: string }) {
+  const r = 110;
+  const circ = 2 * Math.PI * r;
+  const dash = circ * progress;
+
+  return (
+    <svg className="timer-ring" viewBox="0 0 244 244">
+      <circle cx="122" cy="122" r={r} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
+      <circle
+        cx="122"
+        cy="122"
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth="6"
+        strokeDasharray={`${dash} ${circ}`}
+        strokeLinecap="round"
+        style={{ transformOrigin: 'center', transform: 'rotate(-90deg)', transition: 'stroke-dasharray 0.1s linear' }}
+      />
+    </svg>
+  );
+}
 
 export const HurufJoin = () => {
+  injectJoinCSS();
+
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get('sessionId') ?? '';
   const team = (searchParams.get('team') as Team) || 'green';
   const [status, setStatus] = useState<ViewState>('DISCONNECTED');
+  const [timer, setTimer] = useState<number>(0); // seconds remaining
+  const [timerActive, setTimerActive] = useState(false);
+  const [myTimerRunning, setMyTimerRunning] = useState(false);
   const sendRef = useRef<((event: any) => void) | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerStartRef = useRef<number>(0);
+
+  const startTimer = (forTeam: Team) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerStartRef.current = Date.now();
+    setTimer(10);
+    setTimerActive(true);
+    setMyTimerRunning(forTeam === team);
+
+    timerRef.current = setInterval(() => {
+      const elapsed = (Date.now() - timerStartRef.current) / 1000;
+      const remaining = Math.max(0, 10 - elapsed);
+      setTimer(Math.ceil(remaining));
+      if (remaining <= 0) {
+        clearInterval(timerRef.current!);
+        setTimerActive(false);
+        setMyTimerRunning(false);
+        // Notify server timer expired
+        sendRef.current?.({ type: 'TIMER_EXPIRED', team: forTeam });
+      }
+    }, 100);
+  };
+
+  const stopTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setTimerActive(false);
+    setMyTimerRunning(false);
+    setTimer(0);
+  };
 
   const connect = () => {
     if (!sessionId) return;
     const socket = connectHurufSocket(sessionId, (event: HurufServerEvent) => {
       if (event.type === 'SESSION_STATE') {
-        if (!event.state.buzzer.locked) setStatus('READY');
-        else if (event.state.buzzer.lockedBy === team) setStatus('YOU_BUZZED');
-        else setStatus('OTHER_TEAM_BUZZED');
+        if (!event.state.buzzer.locked) {
+          setStatus('READY');
+          stopTimer();
+        } else if (event.state.buzzer.lockedBy === team) {
+          setStatus('YOU_BUZZED');
+        } else {
+          setStatus('OTHER_TEAM_BUZZED');
+        }
       }
       if (event.type === 'BUZZ_LOCKED') {
-        setStatus(event.team === team ? 'YOU_BUZZED' : 'OTHER_TEAM_BUZZED');
+        if (event.team === team) {
+          setStatus('YOU_BUZZED');
+        } else {
+          setStatus('OTHER_TEAM_BUZZED');
+          stopTimer();
+        }
       }
-      if (event.type === 'BUZZ_RESET') setStatus('READY');
+      if (event.type === 'TIMER_START') {
+        startTimer(event.team);
+      }
+      if (event.type === 'BUZZ_RESET' || event.type === 'TIMER_EXPIRED_SERVER') {
+        setStatus('READY');
+        stopTimer();
+      }
     });
 
     sendRef.current = socket.send;
@@ -33,29 +316,82 @@ export const HurufJoin = () => {
     };
     socket.ws.onclose = () => {
       setStatus('DISCONNECTED');
-      setTimeout(connect, 1000);
+      setTimeout(connect, 2000);
     };
   };
 
   useEffect(() => {
     connect();
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, team]);
 
-  const canBuzz = useMemo(() => status === 'READY', [status]);
+  const canBuzz = status === 'READY';
+  const isBuzzing = status === 'YOU_BUZZED';
+  const isOtherBuzzing = status === 'OTHER_TEAM_BUZZED';
+
+  const themeClass = isBuzzing
+    ? `buzzing-${team}`
+    : `${team}-theme`;
+
+  const teamLabel = team === 'green' ? 'الفريق الأخضر' : 'الفريق الأحمر';
+  const otherTeamLabel = team === 'green' ? 'الفريق الأحمر' : 'الفريق الأخضر';
+  const timerProgress = timer / 10;
 
   return (
-    <main className="container mx-auto flex min-h-[70vh] max-w-lg flex-col items-center justify-center px-4 py-10 text-center">
-      <h1 className="font-['Lalezar'] text-5xl text-[#6A8D56]">جرس {team === 'green' ? 'الفريق الأخضر' : 'الفريق الأحمر'}</h1>
-      <p className="mt-4 font-['Cairo'] font-bold">الحالة: {status}</p>
-      <button
-        disabled={!canBuzz}
-        onClick={() => sendRef.current?.({ type: 'BUZZ_REQUEST', team })}
-        className="mt-8 h-56 w-56 rounded-full border-8 border-[#2D3436] bg-[#E08C36] font-['Lalezar'] text-5xl text-white shadow-[8px_8px_0px_#2D3436] disabled:opacity-60"
-      >
-        BUZZ
-      </button>
-      {status === 'DISCONNECTED' ? <p className="mt-4">جاري إعادة الاتصال...</p> : null}
-    </main>
+    <div className={`join-root ${themeClass}`}>
+      <div className="team-badge">
+        {team === 'green' ? '🟢' : '🔴'} {teamLabel}
+      </div>
+
+      {status === 'DISCONNECTED' ? (
+        <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.6)' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🔄</div>
+          <div style={{ fontFamily: 'Lalezar, serif', fontSize: 24, color: 'rgba(255,255,255,0.7)' }}>
+            جاري الاتصال...
+          </div>
+        </div>
+      ) : isOtherBuzzing ? (
+        <div className="other-buzz">
+          <div className="emoji">{team === 'green' ? '🔴' : '🟢'}</div>
+          <div className="msg">{otherTeamLabel}<br />ضغط الجرس!</div>
+          {timerActive && !myTimerRunning && (
+            <div className={`timer-display ${timer <= 3 ? 'urgent' : ''}`}>{timer}</div>
+          )}
+        </div>
+      ) : (
+        <div style={{ position: 'relative', display: 'inline-block' }}>
+          <button
+            disabled={!canBuzz}
+            onClick={() => sendRef.current?.({ type: 'BUZZ_REQUEST', team })}
+            className={`buzz-btn ${team}-btn ${isBuzzing ? 'buzzing' : ''}`}
+          >
+            {/* Timer ring */}
+            {timerActive && myTimerRunning && (
+              <TimerRing
+                progress={timerProgress}
+                color={team === 'green' ? '#90ff60' : '#ff9060'}
+              />
+            )}
+
+            {/* Button content */}
+            {isBuzzing && timerActive ? (
+              <span className={`timer-text ${timer <= 3 ? 'urgent' : ''}`}>{timer}</span>
+            ) : (
+              <span style={{ position: 'relative', zIndex: 1 }}>🔔</span>
+            )}
+          </button>
+        </div>
+      )}
+
+      <div className="status-text">
+        {canBuzz && 'اضغط للإجابة!'}
+        {isBuzzing && timerActive && `جاوب الآن!`}
+        {isBuzzing && !timerActive && 'ضغطت الجرس!'}
+        {isOtherBuzzing && myTimerRunning && `دورك بعد ${timer} ثانية`}
+      </div>
+    </div>
   );
 };
