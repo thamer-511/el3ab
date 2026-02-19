@@ -978,6 +978,23 @@ export const HurufMain: React.FC = () => {
     }
   };
 
+  const displayedWins = useMemo(() => {
+    const base = {
+      green: state?.matchWins?.green ?? 0,
+      red: state?.matchWins?.red ?? 0,
+    };
+
+    if (state?.status === 'ended' && state.winner) {
+      base[state.winner] += 1;
+    }
+
+    return base;
+  }, [state]);
+
+  const isPlaying = state?.status === 'playing';
+  const isEnded   = state?.status === 'ended';
+  const hasActive = !!state?.activeCellId;
+
   /* ── Loading ── */
   if (loading) {
     return (
@@ -1025,23 +1042,6 @@ export const HurufMain: React.FC = () => {
       </div>
     );
   }
-
-  const isPlaying = state?.status === 'playing';
-  const isEnded   = state?.status === 'ended';
-  const hasActive = !!state?.activeCellId;
-
-  const displayedWins = useMemo(() => {
-    const base = {
-      green: state?.matchWins?.green ?? 0,
-      red: state?.matchWins?.red ?? 0,
-    };
-
-    if (state?.status === 'ended' && state.winner) {
-      base[state.winner] += 1;
-    }
-
-    return base;
-  }, [state]);
 
   return (
     <div
