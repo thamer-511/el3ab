@@ -10,6 +10,7 @@ import { connectHurufSocket, createHurufSession } from '../../lib/huruf';
    CONSTANTS
 ───────────────────────────────────────── */
 const TIMER_DURATION = 10; // seconds
+const MATCH_WINS_STORAGE_KEY = 'huruf-match-wins';
 
 /* ─────────────────────────────────────────
    CSS
@@ -759,7 +760,20 @@ export const HurufMain: React.FC = () => {
   const [timer, setTimer]           = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [timerTeam, setTimerTeam]   = useState<Team | null>(null);
-  const [matchWins, setMatchWins]   = useState<{ green: number; red: number }>({ green: 0, red: 0 });
+  const [matchWins, setMatchWins]   = useState<{ green: number; red: number }>(() => {
+    if (typeof window === 'undefined') return { green: 0, red: 0 };
+    try {
+      const raw = window.localStorage.getItem(MATCH_WINS_STORAGE_KEY);
+      if (!raw) return { green: 0, red: 0 };
+      const parsed = JSON.parse(raw) as Partial<{ green: number; red: number }>;
+      return {
+        green: Number.isFinite(parsed.green) ? Number(parsed.green) : 0,
+        red: Number.isFinite(parsed.red) ? Number(parsed.red) : 0,
+      };
+    } catch {
+      return { green: 0, red: 0 };
+    }
+  });
 
   const toastRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -838,6 +852,12 @@ export const HurufMain: React.FC = () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
   }, []);
+
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(MATCH_WINS_STORAGE_KEY, JSON.stringify(matchWins));
+  }, [matchWins]);
 
   const joinLinks = useMemo(() => {
     if (!sessionId) return null;
