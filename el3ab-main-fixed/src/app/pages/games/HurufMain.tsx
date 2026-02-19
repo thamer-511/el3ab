@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  HurufClientEvent,
   HurufServerEvent,
   HurufSessionState,
   Team,
@@ -908,24 +909,34 @@ export const HurufMain: React.FC = () => {
     toastRef.current = setTimeout(() => setToast(null), 1800);
   };
 
-  const onControl = (type: string, label: string) => {
-    send?.({ type });
-    showToast(label);
+  const sendEvent = (event: HurufClientEvent, successLabel?: string) => {
+    if (!send) {
+      showToast('⚠️ لم يتم الاتصال بالخادم بعد');
+      return false;
+    }
+
+    send(event);
+    if (successLabel) showToast(successLabel);
+    return true;
   };
 
-  const selectCell = (cellId: string) => send?.({ type: 'MAIN_SELECT_CELL', cellId });
+  const onControl = (type: HurufClientEvent['type'], label: string) => {
+    sendEvent({ type } as HurufClientEvent, label);
+  };
+
+  const selectCell = (cellId: string) => {
+    sendEvent({ type: 'MAIN_SELECT_CELL', cellId });
+  };
 
   const handleLobbyStart = () => {
-    setShowLobby(false);
-    send?.({ type: 'MAIN_START_GAME' });
-    showToast('▶ بدأت اللعبة!');
+    const started = sendEvent({ type: 'MAIN_START_GAME' }, '▶ بدأت اللعبة!');
+    if (started) setShowLobby(false);
   };
   const handleLobbySkip = () => setShowLobby(false);
 
   const handlePlayAgain = () => {
     stopTimer();
-    send?.({ type: 'MAIN_START_GAME' });
-    showToast('↺ لعبة جديدة!');
+    sendEvent({ type: 'MAIN_START_GAME' }, '↺ لعبة جديدة!');
   };
 
   /* ── Loading ── */
