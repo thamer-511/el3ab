@@ -1058,9 +1058,7 @@ export const HurufMain: React.FC = () => {
       {/* ═══ BODY ═══ */}
       <div style={{
         maxWidth: 1380, margin: '28px auto 0', padding: '0 24px',
-        display: 'grid',
-        gridTemplateColumns: '1fr 300px',
-        gap: 26, alignItems: 'start',
+        display: 'block',
       }}>
 
         {/* ════ LEFT: BOARD ════ */}
