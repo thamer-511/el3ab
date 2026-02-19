@@ -11,6 +11,15 @@ export const createHurufSession = async (): Promise<{ sessionId: string }> => {
 export const connectHurufSocket = (sessionId: string, onEvent: (event: HurufServerEvent) => void) => {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(`${protocol}://${window.location.host}/api/huruf/session/${sessionId}/ws`);
+  const pendingEvents: HurufClientEvent[] = [];
+
+  const flushPending = () => {
+    while (ws.readyState === WebSocket.OPEN && pendingEvents.length > 0) {
+      const next = pendingEvents.shift();
+      if (!next) break;
+      ws.send(JSON.stringify(next));
+    }
+  };
 
   ws.onmessage = (message) => {
     try {
@@ -21,9 +30,16 @@ export const connectHurufSocket = (sessionId: string, onEvent: (event: HurufServ
     }
   };
 
+  ws.addEventListener('open', flushPending);
+
   const send = (event: HurufClientEvent) => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(event));
+      return;
+    }
+
+    if (ws.readyState === WebSocket.CONNECTING) {
+      pendingEvents.push(event);
     }
   };
 
