@@ -36,6 +36,7 @@ export interface HurufSessionState {
   attemptNo: AttemptNo;
   stage: BuzzStage;
   winner: Team | null;
+  matchWins: { green: number; red: number };
   updatedAt: number;
 }
 
