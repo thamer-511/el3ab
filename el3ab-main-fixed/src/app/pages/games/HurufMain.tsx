@@ -11,6 +11,7 @@ import { connectHurufSocket, createHurufSession } from '../../lib/huruf';
 ───────────────────────────────────────── */
 const TIMER_DURATION = 10; // seconds
 const MATCH_WINS_STORAGE_KEY = 'huruf-match-wins';
+const HURUF_SESSION_STORAGE_KEY = 'huruf-main-session-id';
 
 /* ─────────────────────────────────────────
    CSS
@@ -431,6 +432,8 @@ function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
 ───────────────────────────────────────── */
 function ScorePanel({ greenWins, redWins }: { greenWins: number; redWins: number }) {
   const total = Math.max(1, greenWins + redWins);
+  const greenWidth = (greenWins / total) * 100;
+  const redWidth = (redWins / total) * 100;
 
   return (
     <div style={{
@@ -448,23 +451,52 @@ function ScorePanel({ greenWins, redWins }: { greenWins: number; redWins: number
         <div style={{ textAlign: 'center', marginBottom: 6, fontFamily: 'Lalezar, serif', fontSize: 16, color: '#2D3436' }}>
           النتيجة الإجمالية
         </div>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          <div style={{ flex: 1, background: '#f0ebe0', borderRadius: 8, height: 12, overflow: 'hidden' }}>
-            <div style={{
-              height: '100%',
-              width: `${(greenWins / total) * 100}%`,
-              background: 'linear-gradient(90deg,#6A8D56,#4a6b38)',
-              borderRadius: 8, transition: 'width .5s ease',
-            }} />
-          </div>
-          <span style={{ fontFamily: 'Lalezar, serif', fontSize: 13, color: '#ccc' }}>vs</span>
-          <div style={{ flex: 1, background: '#f0ebe0', borderRadius: 8, height: 12, overflow: 'hidden' }}>
-            <div style={{
-              height: '100%',
-              width: `${(redWins / total) * 100}%`,
-              background: 'linear-gradient(90deg,#E67E22,#B85C0A)',
-              borderRadius: 8, transition: 'width .5s ease',
-            }} />
+        <div style={{
+          position: 'relative',
+          background: '#f0ebe0',
+          borderRadius: 10,
+          height: 16,
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            position: 'absolute',
+            insetInlineStart: 0,
+            top: 0,
+            bottom: 0,
+            width: `${greenWidth}%`,
+            background: 'linear-gradient(90deg,#6A8D56,#4a6b38)',
+            transition: 'width .5s ease',
+          }} />
+          <div style={{
+            position: 'absolute',
+            insetInlineEnd: 0,
+            top: 0,
+            bottom: 0,
+            width: `${redWidth}%`,
+            background: 'linear-gradient(90deg,#B85C0A,#E67E22)',
+            transition: 'width .5s ease',
+          }} />
+          <div style={{
+            position: 'absolute',
+            left: '50%',
+            top: -3,
+            bottom: -3,
+            width: 2,
+            transform: 'translateX(-50%)',
+            background: 'rgba(45,52,54,.35)',
+          }} />
+          <div style={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            fontFamily: 'Lalezar, serif',
+            fontSize: 12,
+            color: '#fff',
+            textShadow: '0 1px 2px rgba(0,0,0,.35)',
+            letterSpacing: '.3px',
+          }}>
+            VS
           </div>
         </div>
       </div>
@@ -809,43 +841,79 @@ export const HurufMain: React.FC = () => {
   useEffect(() => {
     let cleanup: (() => void) | undefined;
 
-    createHurufSession()
-      .then(({ sessionId: id }) => {
-        setSessionId(id);
-        const socket = connectHurufSocket(id, (event: HurufServerEvent) => {
-          if (event.type === 'SESSION_STATE') {
-            if (
-              event.state.status === 'ended' &&
-              event.state.winner &&
-              prevStatusRef.current !== 'ended'
-            ) {
-              const winner = event.state.winner;
-              setMatchWins((prev) => ({
-                ...prev,
-                [winner]: prev[winner] + 1,
-              }));
-            }
-            prevStatusRef.current = event.state.status;
-            setState(event.state);
-            // Stop timer if buzzer was released
-            if (!event.state.buzzer.locked) stopTimer();
+    const connectToSession = (id: string) => {
+      setSessionId(id);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(HURUF_SESSION_STORAGE_KEY, id);
+      }
+
+      const socket = connectHurufSocket(id, (event: HurufServerEvent) => {
+        if (event.type === 'SESSION_STATE') {
+          if (
+            event.state.status === 'ended' &&
+            event.state.winner &&
+            prevStatusRef.current !== 'ended'
+          ) {
+            const winner = event.state.winner;
+            setMatchWins((prev) => ({
+              ...prev,
+              [winner]: prev[winner] + 1,
+            }));
           }
-          if (event.type === 'TIMER_START') {
-            startTimer(event.team);
-          }
-          if (event.type === 'BUZZ_RESET' || event.type === 'TIMER_EXPIRED_SERVER') {
-            stopTimer();
-          }
-        });
-        setSend(() => socket.send);
-        socket.ws.onopen = () => socket.send({ type: 'JOIN', role: 'main' });
-        cleanup = () => socket.ws.close();
-        setLoading(false);
-      })
-      .catch(() => {
-        setError('فشل في إنشاء جلسة اللعبة. يرجى المحاولة لاحقاً.');
-        setLoading(false);
+          prevStatusRef.current = event.state.status;
+          setState(event.state);
+          // Stop timer if buzzer was released
+          if (!event.state.buzzer.locked) stopTimer();
+        }
+        if (event.type === 'TIMER_START') {
+          startTimer(event.team);
+        }
+        if (event.type === 'BUZZ_RESET' || event.type === 'TIMER_EXPIRED_SERVER') {
+          stopTimer();
+        }
       });
+
+      setSend(() => socket.send);
+      socket.ws.onopen = () => {
+        socket.send({ type: 'JOIN', role: 'main' });
+        setLoading(false);
+      };
+      socket.ws.onerror = async () => {
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem(HURUF_SESSION_STORAGE_KEY);
+        }
+        try {
+          const { sessionId: newId } = await createHurufSession();
+          connectToSession(newId);
+        } catch {
+          setError('فشل في إنشاء جلسة اللعبة. يرجى المحاولة لاحقاً.');
+          setLoading(false);
+        }
+      };
+
+      cleanup = () => socket.ws.close();
+    };
+
+    if (typeof window !== 'undefined') {
+      const existingSessionId = window.localStorage.getItem(HURUF_SESSION_STORAGE_KEY);
+      if (existingSessionId) {
+        connectToSession(existingSessionId);
+      } else {
+        createHurufSession()
+          .then(({ sessionId: id }) => connectToSession(id))
+          .catch(() => {
+            setError('فشل في إنشاء جلسة اللعبة. يرجى المحاولة لاحقاً.');
+            setLoading(false);
+          });
+      }
+    } else {
+      createHurufSession()
+        .then(({ sessionId: id }) => connectToSession(id))
+        .catch(() => {
+          setError('فشل في إنشاء جلسة اللعبة. يرجى المحاولة لاحقاً.');
+          setLoading(false);
+        });
+    }
 
     return () => {
       cleanup?.();
