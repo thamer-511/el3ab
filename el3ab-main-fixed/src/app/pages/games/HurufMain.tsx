@@ -53,7 +53,8 @@ const HURUF_CSS = `
   .hc-svg text { pointer-events: none; }
 
   .hc-cell { cursor: pointer; }
-  .hc-cell.disabled { cursor: default; opacity: 0.55; }
+  .hc-cell.locked { cursor: default; }
+  .hc-cell.disabled { cursor: default; }
 
   @keyframes activeGlow {
     from { opacity: 0.4; }
@@ -366,7 +367,7 @@ function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
             return (
               <g
                 key={cell.id}
-                className={`hc-cell${isDisabled ? ' disabled' : ''}`}
+                className={`hc-cell${cell.closed ? ' locked' : ''}${isDisabled ? ' disabled' : ''}`}
                 onClick={() => {
                   if (!isDisabled) onSelect(cell.id);
                 }}
@@ -767,6 +768,7 @@ export const HurufMain: React.FC = () => {
   const [error, setError]           = useState<string | null>(null);
   const [loading, setLoading]       = useState(true);
   const [toast, setToast]           = useState<string | null>(null);
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showLobby, setShowLobby]   = useState(true);
   const [timer, setTimer]           = useState(0);
   const [timerActive, setTimerActive] = useState(false);
@@ -958,6 +960,16 @@ export const HurufMain: React.FC = () => {
                 📱 رموز QR
               </button>
             )}
+            <button
+              onClick={() => setShowHowToPlay(true)}
+              style={{
+                background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.18)',
+                borderRadius: 20, padding: '5px 14px', cursor: 'pointer',
+                fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#ddd',
+              }}
+            >
+              📘 كيفية اللعب
+            </button>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 7,
               background: isPlaying ? '#6A8D56' : isEnded ? '#c0392b' : '#555',
@@ -996,6 +1008,33 @@ export const HurufMain: React.FC = () => {
           onNewQuestion={() => onControl('MAIN_NEW_QUESTION', '↻ سؤال جديد')}
           onResetBuzzer={() => { stopTimer(); onControl('MAIN_RESET_BUZZER', '⊘ أعيد الجرس'); }}
         />
+      )}
+
+
+      {showHowToPlay && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 120,
+          background: 'rgba(20,24,20,0.74)', backdropFilter: 'blur(5px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }} onClick={() => setShowHowToPlay(false)}>
+          <div style={{
+            width: 'min(760px, 100%)', maxHeight: '85vh', overflowY: 'auto',
+            background: '#fff', borderRadius: 22, border: '3px solid #2D3436',
+            boxShadow: '10px 10px 0 #2D3436', padding: '24px 24px 20px',
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <h3 style={{ margin: 0, fontFamily: 'Lalezar, serif', fontSize: 30, color: '#2D3436' }}>كيفية اللعب</h3>
+              <button onClick={() => setShowHowToPlay(false)} style={{ border: 'none', background: 'transparent', fontSize: 24, cursor: 'pointer' }}>✕</button>
+            </div>
+            <ol style={{ margin: '16px 0 0', paddingInlineStart: 22, fontFamily: 'Cairo, sans-serif', lineHeight: 1.9, color: '#384244', fontWeight: 700 }}>
+              <li>قبل البدء: افتح زر <b>📱 رموز QR</b> ليظهر رابط كل فريق، ثم يدخل كل فريق من جواله على الرابط الخاص به.</li>
+              <li>بعد الضغط على <b>▶ بدء اللعبة</b> يختار النظام أول خلية عشوائياً، وتظهر بطاقة السؤال تلقائياً.</li>
+              <li>كل فريق يضغط الجرس من جهازه، وأول ضغط صحيح يحصل على فرصة الإجابة خلال 10 ثوانٍ.</li>
+              <li>إذا كانت الإجابة صحيحة تُحجز الخلية بلون الفريق. إذا كانت خاطئة تنتقل الفرصة للفريق الآخر.</li>
+              <li><b>شرط الفوز (الاتصال):</b> الفريق الأخضر يوصل مساراً متصلاً من أعلى اللوحة إلى أسفلها، والفريق الأحمر يوصل مساراً متصلاً من اليمين إلى اليسار.</li>
+            </ol>
+          </div>
+        </div>
       )}
 
       {/* ═══ WINNER BANNER ═══ */}
@@ -1043,16 +1082,6 @@ export const HurufMain: React.FC = () => {
         {/* ════ LEFT: BOARD ════ */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {state && <ScorePanel board={state.board} />}
-
-          {/* Direction hints */}
-          <div style={{ display: 'flex', gap: 10 }}>
-            <div className="dir-strip green" style={{ flex: 1 }}>
-              🟢 أخضر: وصّل من أعلى الشبكة إلى أسفلها ↕
-            </div>
-            <div className="dir-strip red" style={{ flex: 1 }}>
-              🔴 أحمر: وصّل من يمين الشبكة إلى يسارها ↔
-            </div>
-          </div>
 
           <div style={{
             background: '#fff', borderRadius: 22,
@@ -1139,72 +1168,6 @@ export const HurufMain: React.FC = () => {
             >
               ▶ بدء اللعبة
             </button>
-          )}
-
-          {/* Session info */}
-          {state && (
-            <div style={{
-              background: '#fff', borderRadius: 16,
-              border: '2px solid #e8dfc4', padding: '16px 18px',
-            }}>
-              <div style={{
-                fontFamily: 'Lalezar, serif', fontSize: 16, color: '#2D3436', marginBottom: 12,
-              }}>
-                معلومات الجلسة
-              </div>
-              {[
-                {
-                  label: 'الدور',
-                  value: state.currentTeamTurn === 'green' ? '🟢 الفريق الأخضر' : '🔴 الفريق الأحمر',
-                  color: state.currentTeamTurn === 'green' ? '#6A8D56' : '#c0392b',
-                },
-                {
-                  label: 'المرحلة',
-                  value: state.stage === 'first' ? 'الفرصة الأولى' : 'فرصة الفريق الآخر',
-                  color: state.stage === 'first' ? '#6A8D56' : '#E08C36',
-                },
-                {
-                  label: 'الجرس',
-                  value: state.buzzer.locked
-                    ? (state.buzzer.lockedBy === 'green' ? '🟢 أخضر ضغط' : '🔴 أحمر ضغط')
-                    : '—',
-                  color: state.buzzer.lockedBy === 'green'
-                    ? '#6A8D56'
-                    : state.buzzer.lockedBy === 'red'
-                    ? '#c0392b'
-                    : '#aaa',
-                },
-              ].map(({ label, value, color }) => (
-                <div key={label} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '8px 0', borderBottom: '1px solid #f0ebe0',
-                }}>
-                  <span style={{ fontFamily: 'Cairo, sans-serif', fontSize: 12, color: '#999', fontWeight: 600 }}>
-                    {label}
-                  </span>
-                  <span style={{ fontFamily: 'Cairo, sans-serif', fontSize: 13, color, fontWeight: 700 }}>
-                    {value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Hint when not active */}
-          {isPlaying && !hasActive && (
-            <div style={{
-              background: '#fff', borderRadius: 16,
-              border: '3px dashed #d6c9a8', padding: '24px 20px',
-              textAlign: 'center',
-            }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>👆</div>
-              <div style={{ fontFamily: 'Lalezar, serif', fontSize: 18, color: '#aaa' }}>
-                اختر خلية من اللوحة
-              </div>
-              <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#bbb', marginTop: 8 }}>
-                الخلية المختارة ستعرض السؤال ويبدأ الجرس
-              </div>
-            </div>
           )}
 
           {/* Toast */}
