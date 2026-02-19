@@ -363,6 +363,7 @@ function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
             const isActive = cell.id === activeCellId;
             const st = getCellStyle(cell, isActive);
             const isDisabled = cell.closed || !isPlaying || (!!activeCellId && !isActive);
+            const isDimmed = !cell.closed && isDisabled;
 
             return (
               <g
