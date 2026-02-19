@@ -11,6 +11,7 @@ import { connectHurufSocket, createHurufSession } from '../../lib/huruf';
 ───────────────────────────────────────── */
 const TIMER_DURATION = 10; // seconds
 const MATCH_WINS_STORAGE_KEY = 'huruf-match-wins';
+const HURUF_SESSION_STORAGE_KEY = 'huruf-main-session-id';
 
 /* ─────────────────────────────────────────
    CSS
@@ -840,43 +841,79 @@ export const HurufMain: React.FC = () => {
   useEffect(() => {
     let cleanup: (() => void) | undefined;
 
-    createHurufSession()
-      .then(({ sessionId: id }) => {
-        setSessionId(id);
-        const socket = connectHurufSocket(id, (event: HurufServerEvent) => {
-          if (event.type === 'SESSION_STATE') {
-            if (
-              event.state.status === 'ended' &&
-              event.state.winner &&
-              prevStatusRef.current !== 'ended'
-            ) {
-              const winner = event.state.winner;
-              setMatchWins((prev) => ({
-                ...prev,
-                [winner]: prev[winner] + 1,
-              }));
-            }
-            prevStatusRef.current = event.state.status;
-            setState(event.state);
-            // Stop timer if buzzer was released
-            if (!event.state.buzzer.locked) stopTimer();
+    const connectToSession = (id: string) => {
+      setSessionId(id);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(HURUF_SESSION_STORAGE_KEY, id);
+      }
+
+      const socket = connectHurufSocket(id, (event: HurufServerEvent) => {
+        if (event.type === 'SESSION_STATE') {
+          if (
+            event.state.status === 'ended' &&
+            event.state.winner &&
+            prevStatusRef.current !== 'ended'
+          ) {
+            const winner = event.state.winner;
+            setMatchWins((prev) => ({
+              ...prev,
+              [winner]: prev[winner] + 1,
+            }));
           }
-          if (event.type === 'TIMER_START') {
-            startTimer(event.team);
-          }
-          if (event.type === 'BUZZ_RESET' || event.type === 'TIMER_EXPIRED_SERVER') {
-            stopTimer();
-          }
-        });
-        setSend(() => socket.send);
-        socket.ws.onopen = () => socket.send({ type: 'JOIN', role: 'main' });
-        cleanup = () => socket.ws.close();
-        setLoading(false);
-      })
-      .catch(() => {
-        setError('فشل في إنشاء جلسة اللعبة. يرجى المحاولة لاحقاً.');
-        setLoading(false);
+          prevStatusRef.current = event.state.status;
+          setState(event.state);
+          // Stop timer if buzzer was released
+          if (!event.state.buzzer.locked) stopTimer();
+        }
+        if (event.type === 'TIMER_START') {
+          startTimer(event.team);
+        }
+        if (event.type === 'BUZZ_RESET' || event.type === 'TIMER_EXPIRED_SERVER') {
+          stopTimer();
+        }
       });
+
+      setSend(() => socket.send);
+      socket.ws.onopen = () => {
+        socket.send({ type: 'JOIN', role: 'main' });
+        setLoading(false);
+      };
+      socket.ws.onerror = async () => {
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem(HURUF_SESSION_STORAGE_KEY);
+        }
+        try {
+          const { sessionId: newId } = await createHurufSession();
+          connectToSession(newId);
+        } catch {
+          setError('فشل في إنشاء جلسة اللعبة. يرجى المحاولة لاحقاً.');
+          setLoading(false);
+        }
+      };
+
+      cleanup = () => socket.ws.close();
+    };
+
+    if (typeof window !== 'undefined') {
+      const existingSessionId = window.localStorage.getItem(HURUF_SESSION_STORAGE_KEY);
+      if (existingSessionId) {
+        connectToSession(existingSessionId);
+      } else {
+        createHurufSession()
+          .then(({ sessionId: id }) => connectToSession(id))
+          .catch(() => {
+            setError('فشل في إنشاء جلسة اللعبة. يرجى المحاولة لاحقاً.');
+            setLoading(false);
+          });
+      }
+    } else {
+      createHurufSession()
+        .then(({ sessionId: id }) => connectToSession(id))
+        .catch(() => {
+          setError('فشل في إنشاء جلسة اللعبة. يرجى المحاولة لاحقاً.');
+          setLoading(false);
+        });
+    }
 
     return () => {
       cleanup?.();
