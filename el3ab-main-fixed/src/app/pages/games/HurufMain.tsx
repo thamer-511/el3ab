@@ -869,8 +869,8 @@ export const HurufMain: React.FC = () => {
         if (activeSocketRef.current !== socket.ws) return;
 
         try {
-          const currentWins = getCarriedWins(stateRef.current);
-          const { sessionId: newId } = await createHurufSession({ matchWins: currentWins });
+          // Auto-recovery should start a fresh session unless host explicitly pressed "لعبة جديدة".
+          const { sessionId: newId } = await createHurufSession();
           connectToSession(newId);
         } catch {
           setError('فشل في إنشاء جلسة اللعبة. يرجى المحاولة لاحقاً.');
