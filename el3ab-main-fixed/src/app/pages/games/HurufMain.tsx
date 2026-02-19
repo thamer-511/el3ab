@@ -961,6 +961,16 @@ export const HurufMain: React.FC = () => {
                 📱 رموز QR
               </button>
             )}
+            <button
+              onClick={() => setShowHowToPlay(true)}
+              style={{
+                background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.18)',
+                borderRadius: 20, padding: '5px 14px', cursor: 'pointer',
+                fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#ddd',
+              }}
+            >
+              📘 كيفية اللعب
+            </button>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 7,
               background: isPlaying ? '#6A8D56' : isEnded ? '#c0392b' : '#555',
@@ -1171,72 +1181,6 @@ export const HurufMain: React.FC = () => {
             >
               ▶ بدء اللعبة
             </button>
-          )}
-
-          {/* Session info */}
-          {state && (
-            <div style={{
-              background: '#fff', borderRadius: 16,
-              border: '2px solid #e8dfc4', padding: '16px 18px',
-            }}>
-              <div style={{
-                fontFamily: 'Lalezar, serif', fontSize: 16, color: '#2D3436', marginBottom: 12,
-              }}>
-                معلومات الجلسة
-              </div>
-              {[
-                {
-                  label: 'الدور',
-                  value: state.currentTeamTurn === 'green' ? '🟢 الفريق الأخضر' : '🔴 الفريق الأحمر',
-                  color: state.currentTeamTurn === 'green' ? '#6A8D56' : '#c0392b',
-                },
-                {
-                  label: 'المرحلة',
-                  value: state.stage === 'first' ? 'الفرصة الأولى' : 'فرصة الفريق الآخر',
-                  color: state.stage === 'first' ? '#6A8D56' : '#E08C36',
-                },
-                {
-                  label: 'الجرس',
-                  value: state.buzzer.locked
-                    ? (state.buzzer.lockedBy === 'green' ? '🟢 أخضر ضغط' : '🔴 أحمر ضغط')
-                    : '—',
-                  color: state.buzzer.lockedBy === 'green'
-                    ? '#6A8D56'
-                    : state.buzzer.lockedBy === 'red'
-                    ? '#c0392b'
-                    : '#aaa',
-                },
-              ].map(({ label, value, color }) => (
-                <div key={label} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '8px 0', borderBottom: '1px solid #f0ebe0',
-                }}>
-                  <span style={{ fontFamily: 'Cairo, sans-serif', fontSize: 12, color: '#999', fontWeight: 600 }}>
-                    {label}
-                  </span>
-                  <span style={{ fontFamily: 'Cairo, sans-serif', fontSize: 13, color, fontWeight: 700 }}>
-                    {value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Hint when not active */}
-          {isPlaying && !hasActive && (
-            <div style={{
-              background: '#fff', borderRadius: 16,
-              border: '3px dashed #d6c9a8', padding: '24px 20px',
-              textAlign: 'center',
-            }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>👆</div>
-              <div style={{ fontFamily: 'Lalezar, serif', fontSize: 18, color: '#aaa' }}>
-                اختر خلية من اللوحة
-              </div>
-              <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#bbb', marginTop: 8 }}>
-                الخلية المختارة ستعرض السؤال ويبدأ الجرس
-              </div>
-            </div>
           )}
 
           {/* Toast */}
