@@ -796,6 +796,8 @@ export const HurufMain: React.FC = () => {
   const toastRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerStartRef = useRef<number>(0);
+  const activeSocketRef = useRef<WebSocket | null>(null);
+  const connectToSessionRef = useRef<((id: string) => void) | null>(null);
 
   const startTimer = (team: Team) => {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
@@ -837,6 +839,8 @@ export const HurufMain: React.FC = () => {
       setSessionId(id);
       setSessionInUrl(id);
 
+      activeSocketRef.current?.close();
+
       const socket = connectHurufSocket(id, (event: HurufServerEvent) => {
         if (event.type === 'SESSION_STATE') {
           setState(event.state);
@@ -850,6 +854,7 @@ export const HurufMain: React.FC = () => {
         }
       });
 
+      activeSocketRef.current = socket.ws;
       setSend(() => socket.send);
       socket.ws.onopen = () => {
         socket.send({ type: 'JOIN', role: 'main' });
@@ -865,8 +870,15 @@ export const HurufMain: React.FC = () => {
         }
       };
 
-      cleanup = () => socket.ws.close();
+      cleanup = () => {
+        if (activeSocketRef.current === socket.ws) {
+          activeSocketRef.current = null;
+        }
+        socket.ws.close();
+      };
     };
+
+    connectToSessionRef.current = connectToSession;
 
     if (typeof window !== 'undefined') {
       const existingSessionId = new URL(window.location.href).searchParams.get('sessionId');
@@ -892,6 +904,7 @@ export const HurufMain: React.FC = () => {
     return () => {
       cleanup?.();
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      activeSocketRef.current = null;
     };
   }, []);
 
@@ -940,9 +953,20 @@ export const HurufMain: React.FC = () => {
   };
   const handleLobbySkip = () => setShowLobby(false);
 
-  const handlePlayAgain = () => {
+  const handlePlayAgain = async () => {
     stopTimer();
-    sendEvent({ type: 'MAIN_START_GAME' }, '↺ لعبة جديدة!');
+
+    try {
+      const preservedWins = {
+        green: state?.matchWins?.green ?? 0,
+        red: state?.matchWins?.red ?? 0,
+      };
+      const { sessionId: newSessionId } = await createHurufSession({ matchWins: preservedWins });
+      connectToSessionRef.current?.(newSessionId);
+      showToast('↺ لعبة جديدة برمز جلسة جديد!');
+    } catch {
+      showToast('⚠️ تعذر إنشاء جلسة جديدة');
+    }
   };
 
   /* ── Loading ── */

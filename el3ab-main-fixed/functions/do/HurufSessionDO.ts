@@ -40,7 +40,8 @@ export class HurufSessionDO {
     const url = new URL(request.url);
 
     if (url.pathname.endsWith('/init') && request.method === 'POST') {
-      await this.restoreOrInit();
+      const initPayload = (await request.json().catch(() => ({}))) as { matchWins?: { green?: number; red?: number } };
+      await this.restoreOrInit(initPayload.matchWins);
       return new Response(JSON.stringify({ ok: true, sessionId: this.state.sessionId }), {
         headers: { 'content-type': 'application/json' },
       });
@@ -75,7 +76,7 @@ export class HurufSessionDO {
     };
   }
 
-  private async restoreOrInit() {
+  private async restoreOrInit(initialWins?: { green?: number; red?: number }) {
     const saved = await this.stateStore.storage.get<HurufSessionState>('session_state');
     if (saved) {
       this.state = {
@@ -89,6 +90,12 @@ export class HurufSessionDO {
       return;
     }
     this.state = this.buildInitialState();
+    if (initialWins) {
+      this.state.matchWins = {
+        green: Number(initialWins.green ?? 0),
+        red: Number(initialWins.red ?? 0),
+      };
+    }
     await this.persistState();
   }
 

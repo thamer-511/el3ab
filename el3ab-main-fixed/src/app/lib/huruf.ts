@@ -2,8 +2,16 @@ import type { HurufClientEvent, HurufServerEvent } from '../../../shared/huruf/t
 
 export type HurufSendResult = 'sent' | 'queued' | 'dropped';
 
-export const createHurufSession = async (): Promise<{ sessionId: string }> => {
-  const response = await fetch('/api/huruf/session/create', { method: 'POST' });
+export interface CreateHurufSessionPayload {
+  matchWins?: { green: number; red: number };
+}
+
+export const createHurufSession = async (payload?: CreateHurufSessionPayload): Promise<{ sessionId: string }> => {
+  const response = await fetch('/api/huruf/session/create', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
   if (!response.ok) {
     throw new Error('Failed to create Huruf session');
   }
