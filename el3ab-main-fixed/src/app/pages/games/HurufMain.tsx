@@ -798,6 +798,7 @@ export const HurufMain: React.FC = () => {
   const timerStartRef = useRef<number>(0);
   const activeSocketRef = useRef<WebSocket | null>(null);
   const connectToSessionRef = useRef<((id: string) => void) | null>(null);
+  const stateRef = useRef<HurufSessionState | null>(null);
 
   const startTimer = (team: Team) => {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
@@ -823,6 +824,10 @@ export const HurufMain: React.FC = () => {
     setTimerTeam(null);
     setTimer(0);
   };
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   /* ── Session init ── */
   useEffect(() => {
@@ -861,8 +866,14 @@ export const HurufMain: React.FC = () => {
         setLoading(false);
       };
       socket.ws.onerror = async () => {
+        if (activeSocketRef.current !== socket.ws) return;
+
         try {
-          const { sessionId: newId } = await createHurufSession();
+          const currentWins = {
+            green: stateRef.current?.matchWins?.green ?? 0,
+            red: stateRef.current?.matchWins?.red ?? 0,
+          };
+          const { sessionId: newId } = await createHurufSession({ matchWins: currentWins });
           connectToSession(newId);
         } catch {
           setError('فشل في إنشاء جلسة اللعبة. يرجى المحاولة لاحقاً.');
