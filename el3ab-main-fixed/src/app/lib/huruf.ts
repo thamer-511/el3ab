@@ -1,5 +1,7 @@
 import type { HurufClientEvent, HurufServerEvent } from '../../../shared/huruf/types';
 
+export type HurufSendResult = 'sent' | 'queued' | 'dropped';
+
 export const createHurufSession = async (): Promise<{ sessionId: string }> => {
   const response = await fetch('/api/huruf/session/create', { method: 'POST' });
   if (!response.ok) {
@@ -32,15 +34,18 @@ export const connectHurufSocket = (sessionId: string, onEvent: (event: HurufServ
 
   ws.addEventListener('open', flushPending);
 
-  const send = (event: HurufClientEvent) => {
+  const send = (event: HurufClientEvent): HurufSendResult => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(event));
-      return;
+      return 'sent';
     }
 
     if (ws.readyState === WebSocket.CONNECTING) {
       pendingEvents.push(event);
+      return 'queued';
     }
+
+    return 'dropped';
   };
 
   return { ws, send };
