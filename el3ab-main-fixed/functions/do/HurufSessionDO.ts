@@ -173,9 +173,15 @@ export class HurufSessionDO {
     this.clearTimer();
     this.usedQuestionsByCell.clear();
 
-    // Rebuild full round state so no owned/closed cell data can leak from previous round.
+    const previousWins = {
+      green: this.state.matchWins?.green ?? 0,
+      red: this.state.matchWins?.red ?? 0,
+    };
+
+    // Rebuild round state while preserving cumulative wins across rounds.
     const freshState = this.buildInitialState(this.state.sessionId);
-    freshState.matchWins = this.state.matchWins;
+    freshState.board = this.resetBoardCells(this.state.board);
+    freshState.matchWins = previousWins;
     const randomCell = freshState.board[Math.floor(Math.random() * freshState.board.length)] ?? null;
 
     freshState.status = 'playing';
@@ -326,7 +332,7 @@ export class HurufSessionDO {
     if (won) {
       this.state.status = 'ended';
       this.state.winner = team;
-      this.state.matchWins[team] += 1;
+      this.state.matchWins[team] = (this.state.matchWins[team] ?? 0) + 1;
       this.broadcast({ type: 'GAME_ENDED', winner: team });
     }
 
@@ -373,6 +379,14 @@ export class HurufSessionDO {
 
   private pickQuestion(cellId: string): HurufQuestion | null {
     return this.pickQuestionFromBoard(this.state.board, cellId);
+  }
+
+  private resetBoardCells(board: HurufCell[]): HurufCell[] {
+    return board.map((cell) => ({
+      ...cell,
+      owner: null,
+      closed: false,
+    }));
   }
 
   private createBoard(): HurufCell[] {
