@@ -1,6 +1,6 @@
 export type Team = 'green' | 'red';
 export type SessionStatus = 'lobby' | 'playing' | 'ended';
-export type BuzzStage = 'first' | 'other' | 'final';
+export type BuzzStage = 'first' | 'other';
 export type AttemptNo = 1 | 2;
 export type ClientRole = 'main' | 'mobile';
 
@@ -22,6 +22,7 @@ export interface HurufQuestion {
 export interface BuzzerState {
   locked: boolean;
   lockedBy: Team | null;
+  timerStart: number | null; // timestamp when timer started
 }
 
 export interface HurufSessionState {
@@ -47,6 +48,7 @@ export type HurufClientEvent =
   | { type: 'MAIN_MARK_WRONG' }
   | { type: 'MAIN_NEW_QUESTION' }
   | { type: 'MAIN_RESET_BUZZER' }
+  | { type: 'TIMER_EXPIRED'; team: Team }
   | { type: 'PING' };
 
 export type HurufServerEvent =
@@ -56,4 +58,6 @@ export type HurufServerEvent =
   | { type: 'QUESTION_CHANGED'; cellId: string; question: HurufQuestion }
   | { type: 'CELL_OWNED'; cellId: string; team: Team }
   | { type: 'GAME_ENDED'; winner: Team }
+  | { type: 'TIMER_START'; team: Team; durationMs: number }
+  | { type: 'TIMER_EXPIRED_SERVER'; nextTeam: Team | null }
   | { type: 'ERROR'; message: string };
