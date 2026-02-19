@@ -53,6 +53,7 @@ const HURUF_CSS = `
   .hc-svg text { pointer-events: none; }
 
   .hc-cell { cursor: pointer; }
+  .hc-cell.locked { cursor: default; }
   .hc-cell.disabled { cursor: default; opacity: 0.55; }
 
   @keyframes activeGlow {
@@ -362,11 +363,12 @@ function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
             const isActive = cell.id === activeCellId;
             const st = getCellStyle(cell, isActive);
             const isDisabled = cell.closed || !isPlaying || (!!activeCellId && !isActive);
+            const isDimmed = !cell.closed && isDisabled;
 
             return (
               <g
                 key={cell.id}
-                className={`hc-cell${isDisabled ? ' disabled' : ''}`}
+                className={`hc-cell${cell.closed ? ' locked' : ''}${isDimmed ? ' disabled' : ''}`}
                 onClick={() => {
                   if (!isDisabled) onSelect(cell.id);
                 }}
