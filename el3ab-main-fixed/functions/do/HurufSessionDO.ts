@@ -78,7 +78,14 @@ export class HurufSessionDO {
   private async restoreOrInit() {
     const saved = await this.stateStore.storage.get<HurufSessionState>('session_state');
     if (saved) {
-      this.state = saved;
+      this.state = {
+        ...saved,
+        matchWins: saved.matchWins ?? { green: 0, red: 0 },
+      };
+      // Persist migrated sessions that existed before `matchWins` was introduced.
+      if (!saved.matchWins) {
+        await this.persistState();
+      }
       return;
     }
     this.state = this.buildInitialState();

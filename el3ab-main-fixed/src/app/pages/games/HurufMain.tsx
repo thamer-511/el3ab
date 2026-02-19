@@ -1140,7 +1140,7 @@ export const HurufMain: React.FC = () => {
 
         {/* ════ LEFT: BOARD ════ */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <ScorePanel greenWins={state?.matchWins.green ?? 0} redWins={state?.matchWins.red ?? 0} />
+          <ScorePanel greenWins={state?.matchWins?.green ?? 0} redWins={state?.matchWins?.red ?? 0} />
 
           <div style={{
             background: '#fff', borderRadius: 22,
