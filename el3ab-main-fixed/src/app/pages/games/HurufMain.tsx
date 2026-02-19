@@ -35,96 +35,33 @@ const HURUF_CSS = `
   .huruf-root * { box-sizing: border-box; }
   .huruf-root { direction: rtl; font-family: 'Cairo', sans-serif; }
 
-  /* ══════ HONEYCOMB ══════ 
-     Flat-top hexagons using CSS clip-path
-     Green: connects TOP <-> BOTTOM
-     Red:   connects LEFT <-> RIGHT
-  */
-  .hc-grid {
+  /* ══════ HONEYCOMB (SVG, pixel-perfect) ══════ */
+  .hc-svg-wrap {
     display: flex;
-    flex-direction: column;
+    justify-content: center;
     align-items: center;
-    gap: 0;
     padding: 12px 0;
     user-select: none;
   }
 
-  .hc-row {
-    display: flex;
-    flex-direction: row;
-    gap: 0;
+  .hc-svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
   }
 
-  /* Offset every even row to the right by half hex */
-  .hc-row.offset {
-    margin-right: -42px;
-  }
+  .hc-svg text { pointer-events: none; }
 
-  .hc-hex-wrap {
-    width: 78px;
-    height: 68px;
-    position: relative;
-    flex-shrink: 0;
-    margin: -6px 2px;
-  }
-
-  .hc-hex {
-    position: absolute;
-    inset: 0;
-    /* Flat-top hexagon */
-    clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    border: none;
-    outline: none;
-    font-family: 'Lalezar', serif;
-    font-size: 22px;
-    font-weight: 900;
-    transition: filter 0.15s, transform 0.15s;
-    color: var(--dark);
-    background: var(--cream);
-  }
-
-  .hc-hex:hover:not(:disabled):not(.hc-active) {
-    filter: brightness(0.9);
-    transform: scale(1.06);
-    z-index: 2;
-  }
-
-  .hc-hex:disabled { cursor: default; }
-
-  .hc-empty  { background: #fffcf0; }
-  .hc-green  { background: linear-gradient(160deg, var(--green), var(--green-dark)); color: #fff; }
-  .hc-red    { background: linear-gradient(160deg, var(--red), var(--red-dark)); color: #fff; }
-
-  .hc-active {
-    background: linear-gradient(160deg, #fff3cc, #ffd966);
-    box-shadow: inset 0 0 0 3px var(--orange);
-    z-index: 3;
-    transform: scale(1.1);
-    cursor: default;
-  }
-  .hc-active::after {
-    content: '';
-    position: absolute;
-    inset: -4px;
-    clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
-    background: rgba(224,140,54,0.25);
-    animation: activeGlow 1.2s ease infinite alternate;
-    pointer-events: none;
-  }
+  .hc-cell { cursor: pointer; }
+  .hc-cell.disabled { cursor: default; opacity: 0.55; }
 
   @keyframes activeGlow {
     from { opacity: 0.4; }
     to   { opacity: 1; }
   }
 
-  .hc-closed {
-    background: #e0ddd4;
-    opacity: 0.5;
-    cursor: default;
+  .hc-active-glow {
+    animation: activeGlow 1.2s ease infinite alternate;
   }
 
   /* ══════ DIRECTION STRIPS ══════ */
@@ -313,7 +250,7 @@ function injectCSS(id: string, css: string) {
 }
 
 /* ─────────────────────────────────────────
-   HONEYCOMB BOARD
+   HONEYCOMB BOARD (SVG, pixel-perfect)
 ───────────────────────────────────────── */
 interface HexBoardProps {
   board: HurufSessionState['board'];
@@ -326,43 +263,162 @@ const COLS = 6;
 const ROWS = 6;
 
 function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
+  // Geometry (pointy-top, row-stagger) — matches your “Perfect” reference math style.
+  const R = 50; // circumradius
+  const W = R * Math.sqrt(3);
+  const H = 2 * R;
+  const stepX = W;
+  const stepY = H * 0.75;
+  const oddShift = W / 2;
+  const PAD = 40;
+
+  const strokeOuter = 7;
+  const innerInset = 3.5;
+
   const rows: typeof board[] = [];
   for (let r = 0; r < ROWS; r++) rows.push(board.slice(r * COLS, r * COLS + COLS));
 
-  return (
-    <div className="hc-grid">
-      {rows.map((row, ri) => (
-        <div key={ri} className={`hc-row${ri % 2 === 1 ? ' offset' : ''}`}>
-          {row.map((cell) => {
-            const isActive = cell.id === activeCellId;
-            const colorClass =
-              isActive
-                ? 'hc-active'
-                : cell.closed && cell.owner === 'green'
-                ? 'hc-green'
-                : cell.closed && cell.owner === 'red'
-                ? 'hc-red'
-                : cell.closed
-                ? 'hc-closed'
-                : 'hc-empty';
+  const svgW = PAD * 2 + (COLS - 1) * stepX + W + oddShift;
+  const svgH = PAD * 2 + (ROWS - 1) * stepY + H;
 
+  const cx0 = svgW / 2;
+  const cy0 = svgH / 2;
+
+  const hexPoints = (cx: number, cy: number, rad: number) => {
+    const pts: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const ang = (Math.PI / 180) * (60 * i - 30);
+      pts.push(`${cx + rad * Math.cos(ang)},${cy + rad * Math.sin(ang)}`);
+    }
+    return pts.join(' ');
+  };
+
+  const getCellStyle = (cell: HurufSessionState['board'][number], isActive: boolean) => {
+    if (isActive) {
+      return {
+        fill: '#fff3cc',
+        innerFill: '#ffffff',
+        stroke: '#111',
+        text: '#00008B',
+        ring: true,
+      };
+    }
+    if (cell.closed && cell.owner === 'green') {
+      return { fill: '#6A8D56', innerFill: '#6A8D56', stroke: '#111', text: '#ffffff', ring: false };
+    }
+    if (cell.closed && cell.owner === 'red') {
+      return { fill: '#c0392b', innerFill: '#c0392b', stroke: '#111', text: '#ffffff', ring: false };
+    }
+    if (cell.closed) {
+      return { fill: '#e0ddd4', innerFill: '#e0ddd4', stroke: '#111', text: '#777777', ring: false };
+    }
+    return { fill: '#FDF8E8', innerFill: '#ffffff', stroke: '#111', text: '#00008B', ring: false };
+  };
+
+  return (
+    <div className="hc-svg-wrap">
+      <svg
+        className="hc-svg"
+        xmlns="http://www.w3.org/2000/svg"
+        width={Math.ceil(svgW)}
+        height={Math.ceil(svgH)}
+        viewBox={`0 0 ${Math.ceil(svgW)} ${Math.ceil(svgH)}`}
+      >
+        <defs>
+          <style>
+            {`@import url('https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@700&display=swap');`}
+          </style>
+
+          <filter id="activeGlow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feColorMatrix
+              in="blur"
+              type="matrix"
+              values="
+                1 0 0 0 0
+                0 0.6 0 0 0
+                0 0 0 0 0
+                0 0 0 0.55 0"
+              result="colored"
+            />
+            <feMerge>
+              <feMergeNode in="colored" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* Background like your HTML demo */}
+        <rect width={svgW} height={svgH} fill="#2e7d32" />
+        <polygon points={`0,0 ${svgW},0 ${cx0},${cy0}`} fill="#e65100" />
+        <polygon points={`0,${svgH} ${svgW},${svgH} ${cx0},${cy0}`} fill="#e65100" />
+
+        {rows.map((row, r) => {
+          const shift = r % 2 === 1 ? oddShift : 0;
+          return row.map((cell, c) => {
+            const cx = PAD + W / 2 + c * stepX + shift;
+            const cy = PAD + H / 2 + r * stepY;
+
+            const isActive = cell.id === activeCellId;
+            const st = getCellStyle(cell, isActive);
             const isDisabled = cell.closed || !isPlaying || (!!activeCellId && !isActive);
 
             return (
-              <div key={cell.id} className="hc-hex-wrap">
-                <button
-                  className={`hc-hex ${colorClass}`}
-                  disabled={isDisabled}
-                  onClick={() => !isDisabled && onSelect(cell.id)}
-                  title={cell.letter}
+              <g
+                key={cell.id}
+                className={`hc-cell${isDisabled ? ' disabled' : ''}`}
+                onClick={() => {
+                  if (!isDisabled) onSelect(cell.id);
+                }}
+                style={{ pointerEvents: isDisabled ? 'none' : 'auto' }}
+              >
+                {/* Outer */}
+                <polygon
+                  points={hexPoints(cx, cy, R)}
+                  fill={st.fill}
+                  stroke={st.stroke}
+                  strokeWidth={strokeOuter}
+                  strokeLinejoin="round"
+                  filter={isActive ? 'url(#activeGlow)' : 'none'}
+                  className={isActive ? 'hc-active-glow' : undefined}
+                />
+
+                {/* Inner (double-border effect) */}
+                <polygon
+                  points={hexPoints(cx, cy, R - innerInset)}
+                  fill={st.innerFill}
+                  stroke="none"
+                />
+
+                {/* Active ring */}
+                {st.ring && (
+                  <polygon
+                    points={hexPoints(cx, cy, R - 2)}
+                    fill="none"
+                    stroke="#E08C36"
+                    strokeWidth={4}
+                    strokeLinejoin="round"
+                  />
+                )}
+
+                {/* Letter */}
+                <text
+                  x={cx}
+                  y={cy}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontFamily="Noto Naskh Arabic, Arial, sans-serif"
+                  fontSize={28}
+                  fontWeight={700}
+                  fill={st.text}
                 >
                   {cell.letter}
-                </button>
-              </div>
+                </text>
+              </g>
             );
-          })}
-        </div>
-      ))}
+          });
+        })}
+      </svg>
     </div>
   );
 }
@@ -1112,7 +1168,11 @@ export const HurufMain: React.FC = () => {
                   value: state.buzzer.locked
                     ? (state.buzzer.lockedBy === 'green' ? '🟢 أخضر ضغط' : '🔴 أحمر ضغط')
                     : '—',
-                  color: state.buzzer.lockedBy === 'green' ? '#6A8D56' : state.buzzer.lockedBy === 'red' ? '#c0392b' : '#aaa',
+                  color: state.buzzer.lockedBy === 'green'
+                    ? '#6A8D56'
+                    : state.buzzer.lockedBy === 'red'
+                    ? '#c0392b'
+                    : '#aaa',
                 },
               ].map(({ label, value, color }) => (
                 <div key={label} style={{
