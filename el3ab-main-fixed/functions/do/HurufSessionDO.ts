@@ -162,11 +162,15 @@ export class HurufSessionDO {
   }
 
   private async startGame() {
-    // Pick a random first cell for the current team
-    const availableCells = this.state.board.filter(c => !c.closed);
-    const randomCell = availableCells[Math.floor(Math.random() * availableCells.length)];
+    this.clearTimer();
+    this.usedQuestionsByCell.clear();
+
+    // Always start a fresh round board
+    const board = this.createBoard();
+    const randomCell = board[Math.floor(Math.random() * board.length)] ?? null;
 
     this.state.status = 'playing';
+    this.state.board = board;
     this.state.winner = null;
     this.state.currentTeamTurn = 'green';
     this.state.attemptNo = 1;
