@@ -470,7 +470,7 @@ function ScorePanel({ board }: { board: HurufSessionState['board'] }) {
         <div style={{ fontFamily: 'Lalezar, serif', fontSize: 32, color: '#c0392b', lineHeight: 1 }}>
           {redCount}
         </div>
-        <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 11, color: '#999' }}>أحمر</div>
+        <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 11, color: '#999' }}>برتقالي</div>
       </div>
     </div>
   );
@@ -503,7 +503,7 @@ function QuestionOverlay({
   const stage = state.stage;
   const stageBg = stage === 'first' ? '#6A8D56' : '#E08C36';
   const stageLabel = stage === 'first' ? 'الفرصة الأولى' : 'فرصة الفريق الآخر';
-  const lockedByLabel = lockedBy === 'green' ? 'الفريق الأخضر' : lockedBy === 'red' ? 'الفريق الأحمر' : null;
+  const lockedByLabel = lockedBy === 'green' ? 'الفريق الأخضر' : lockedBy === 'red' ? 'الفريق البرتقالي' : null;
   const lockedColor = lockedBy === 'green' ? '#6A8D56' : '#c0392b';
   const timerPercent = timer / TIMER_DURATION;
   const timerColor =
@@ -706,25 +706,19 @@ function QrLobby({
             flex: 1, background: '#6A8D5618', border: '2px solid #6A8D56',
             borderRadius: 12, padding: '10px 14px', textAlign: 'center',
           }}>
-            <div style={{ fontSize: 20, marginBottom: 4 }}>🟢</div>
-            <div style={{ fontFamily: 'Lalezar, serif', fontSize: 15, color: '#6A8D56' }}>
-              أخضر: من فوق لتحت ↕
-            </div>
+            
           </div>
           <div style={{
             flex: 1, background: '#c0392b18', border: '2px solid #c0392b',
             borderRadius: 12, padding: '10px 14px', textAlign: 'center',
           }}>
-            <div style={{ fontSize: 20, marginBottom: 4 }}>🔴</div>
-            <div style={{ fontFamily: 'Lalezar, serif', fontSize: 15, color: '#c0392b' }}>
-              أحمر: من يمين ليسار ↔
-            </div>
+            
           </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 28 }}>
-          <QrCard accent="#6A8D56" label="فريق أخضر" link={greenLink} />
-          <QrCard accent="#c0392b" label="فريق أحمر"  link={redLink}   />
+          <QrCard accent="#6A8D56" label="الفريق الأخضر" link={greenLink} />
+          <QrCard accent="#c0392b" label="الفريق البرتقالي"  link={redLink}   />
         </div>
 
         <div style={{ display: 'flex', gap: 12 }}>
@@ -739,17 +733,6 @@ function QrLobby({
             }}
           >
             ابدأ اللعبة ▶
-          </button>
-          <button
-            onClick={onSkip}
-            style={{
-              padding: '13px 20px',
-              background: 'transparent', border: '2px solid #d0c8b8',
-              borderRadius: 14, cursor: 'pointer',
-              fontFamily: 'Cairo, sans-serif', fontSize: 14, color: '#aaa',
-            }}
-          >
-            تخطي
           </button>
         </div>
       </div>
@@ -1032,7 +1015,7 @@ export const HurufMain: React.FC = () => {
               <li>بعد الضغط على <b>▶ بدء اللعبة</b> يختار النظام أول خلية عشوائياً، وتظهر بطاقة السؤال تلقائياً.</li>
               <li>كل فريق يضغط الجرس من جهازه، وأول ضغط صحيح يحصل على فرصة الإجابة خلال 10 ثوانٍ.</li>
               <li>إذا كانت الإجابة صحيحة تُحجز الخلية بلون الفريق. إذا كانت خاطئة تنتقل الفرصة للفريق الآخر.</li>
-              <li><b>شرط الفوز (الاتصال):</b> الفريق الأخضر يوصل مساراً متصلاً من أعلى اللوحة إلى أسفلها، والفريق الأحمر يوصل مساراً متصلاً من اليمين إلى اليسار.</li>
+              <li><b>شرط الفوز (الاتصال):</b> الفريق الأخضر يوصل مساراً متصلاً من أعلى اللوحة إلى أسفلها، والفريق البرتقالي يوصل مساراً متصلاً من اليمين إلى اليسار.</li>
             </ol>
           </div>
         </div>
@@ -1054,7 +1037,7 @@ export const HurufMain: React.FC = () => {
           >
             <span style={{ fontSize: 36 }}>🏆</span>
             <span style={{ fontFamily: 'Lalezar, serif', fontSize: 28, color: '#fff' }}>
-              الفائز: {state.winner === 'green' ? 'الفريق الأخضر' : 'الفريق الأحمر'}
+              الفائز: {state.winner === 'green' ? 'الفريق الأخضر' : 'الفريق البرتقالي'}
             </span>
             <span style={{ fontSize: 36 }}>🏆</span>
             <button
@@ -1107,7 +1090,7 @@ export const HurufMain: React.FC = () => {
                     fontFamily: 'Lalezar, serif', fontSize: 16,
                     color: state.currentTeamTurn === 'green' ? '#6A8D56' : '#c0392b',
                   }}>
-                    {state.currentTeamTurn === 'green' ? '🟢 الأخضر' : '🔴 الأحمر'}
+                    {state.currentTeamTurn === 'green' ? '🟢 الأخضر' : '🔴 البرتقالي'}
                   </span>
                 </div>
               )}
@@ -1134,7 +1117,7 @@ export const HurufMain: React.FC = () => {
             }}>
               {[
                 { label: 'أخضر', bg: 'linear-gradient(135deg,#6A8D56,#4a6b38)' },
-                { label: 'أحمر',  bg: 'linear-gradient(135deg,#c0392b,#922b21)' },
+                { label: 'برتقالي',  bg: 'linear-gradient(135deg,#c0392b,#922b21)' },
                 { label: 'نشطة',  bg: 'linear-gradient(135deg,#fff4d6,#ffe099)', border: '2px solid #E08C36' },
                 { label: 'متاحة', bg: '#fffcf0', border: '2px solid #d6c9a8' },
               ].map(({ label, bg, border }) => (
@@ -1151,37 +1134,6 @@ export const HurufMain: React.FC = () => {
             </div>
           </div>
         </div>
-
-        {/* ════ RIGHT SIDEBAR ════ */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-          <button
-            onClick={() => setShowHowToPlay(true)}
-            style={{
-              width: '100%', padding: '14px 16px',
-              background: '#fff', border: '2px solid #2D3436', borderRadius: 14, cursor: 'pointer',
-              fontFamily: 'Lalezar, serif', fontSize: 19, color: '#2D3436',
-            }}
-          >
-            📘 كيفية اللعب
-          </button>
-
-
-          {/* Start Game (if not playing) */}
-          {!isPlaying && !isEnded && (
-            <button
-              onClick={() => { send?.({ type: 'MAIN_START_GAME' }); showToast('▶ بدأت اللعبة!'); }}
-              style={{
-                width: '100%', padding: '16px',
-                background: 'linear-gradient(135deg,#2D3436,#3d4649)',
-                border: '2px solid #2D3436', borderRadius: 14, cursor: 'pointer',
-                fontFamily: 'Lalezar, serif', fontSize: 20, color: '#FDF8E8',
-                boxShadow: '0 6px 18px rgba(45,52,54,.35)',
-              }}
-            >
-              ▶ بدء اللعبة
-            </button>
-          )}
 
           {/* Toast */}
           {toast && (
