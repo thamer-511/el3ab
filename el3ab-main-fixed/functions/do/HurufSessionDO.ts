@@ -14,8 +14,8 @@ type SocketMeta = { role: 'main' | 'mobile'; team?: Team };
 const GRID_SIZE = 6;
 const TIMER_DURATION_MS = 10000; // 10 seconds
 
-// All available letters
-const ALL_LETTERS = ['ا', 'ب', 'ت', 'ث', 'ج', 'ح', 'د', 'ر', 'س', 'ش', 'ع', 'ق', 'ك', 'م', 'ن', 'و', 'ي'];
+// Letters that have questions
+const ALL_LETTERS = Object.keys(questionBank as Record<string, HurufQuestion[]>);
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -347,12 +347,13 @@ export class HurufSessionDO {
     if (!all.length) return null;
 
     const used = this.usedQuestionsByCell.get(cellId) ?? [];
-    let next = all.find((q) => !used.includes(q.id));
-    if (!next) {
+    let candidates = all.filter((q) => !used.includes(q.id));
+    if (!candidates.length) {
       this.usedQuestionsByCell.set(cellId, []);
-      next = all[0];
+      candidates = [...all];
     }
 
+    const next = candidates[Math.floor(Math.random() * candidates.length)];
     const updatedUsed = [...(this.usedQuestionsByCell.get(cellId) ?? []), next.id];
     this.usedQuestionsByCell.set(cellId, updatedUsed);
 
@@ -360,13 +361,33 @@ export class HurufSessionDO {
   }
 
   private createBoard(): HurufCell[] {
-    // Create a random assignment of letters to cells
+    // Random letters from the supported question set, distributed as evenly as possible.
     const totalCells = GRID_SIZE * GRID_SIZE;
+    const baseCount = Math.floor(totalCells / ALL_LETTERS.length);
+    const remainder = totalCells % ALL_LETTERS.length;
+
     const lettersPool: string[] = [];
-    while (lettersPool.length < totalCells) {
-      lettersPool.push(...ALL_LETTERS);
+    const randomizedLetters = shuffle(ALL_LETTERS);
+    randomizedLetters.forEach((letter, index) => {
+      const count = baseCount + (index < remainder ? 1 : 0);
+      for (let i = 0; i < count; i++) lettersPool.push(letter);
+    });
+
+    let shuffledLetters = shuffle(lettersPool);
+
+    // Best effort to reduce immediate horizontal duplicates.
+    for (let attempt = 0; attempt < 10; attempt++) {
+      let hasAdjacentDuplicate = false;
+      for (let i = 1; i < shuffledLetters.length; i++) {
+        const sameRow = Math.floor(i / GRID_SIZE) === Math.floor((i - 1) / GRID_SIZE);
+        if (sameRow && shuffledLetters[i] === shuffledLetters[i - 1]) {
+          hasAdjacentDuplicate = true;
+          break;
+        }
+      }
+      if (!hasAdjacentDuplicate) break;
+      shuffledLetters = shuffle(lettersPool);
     }
-    const shuffledLetters = shuffle(lettersPool).slice(0, totalCells);
 
     const cells: HurufCell[] = [];
     for (let row = 0; row < GRID_SIZE; row++) {

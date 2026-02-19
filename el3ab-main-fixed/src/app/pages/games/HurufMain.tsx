@@ -54,7 +54,7 @@ const HURUF_CSS = `
 
   .hc-cell { cursor: pointer; }
   .hc-cell.locked { cursor: default; }
-  .hc-cell.disabled { cursor: default; opacity: 0.55; }
+  .hc-cell.disabled { cursor: default; }
 
   @keyframes activeGlow {
     from { opacity: 0.4; }
@@ -368,7 +368,7 @@ function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
             return (
               <g
                 key={cell.id}
-                className={`hc-cell${cell.closed ? ' locked' : ''}${isDimmed ? ' disabled' : ''}`}
+                className={`hc-cell${cell.closed ? ' locked' : ''}${isDisabled ? ' disabled' : ''}`}
                 onClick={() => {
                   if (!isDisabled) onSelect(cell.id);
                 }}
@@ -769,6 +769,7 @@ export const HurufMain: React.FC = () => {
   const [error, setError]           = useState<string | null>(null);
   const [loading, setLoading]       = useState(true);
   const [toast, setToast]           = useState<string | null>(null);
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showLobby, setShowLobby]   = useState(true);
   const [timer, setTimer]           = useState(0);
   const [timerActive, setTimerActive] = useState(false);
@@ -1000,6 +1001,33 @@ export const HurufMain: React.FC = () => {
         />
       )}
 
+
+      {showHowToPlay && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 120,
+          background: 'rgba(20,24,20,0.74)', backdropFilter: 'blur(5px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }} onClick={() => setShowHowToPlay(false)}>
+          <div style={{
+            width: 'min(760px, 100%)', maxHeight: '85vh', overflowY: 'auto',
+            background: '#fff', borderRadius: 22, border: '3px solid #2D3436',
+            boxShadow: '10px 10px 0 #2D3436', padding: '24px 24px 20px',
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <h3 style={{ margin: 0, fontFamily: 'Lalezar, serif', fontSize: 30, color: '#2D3436' }}>كيفية اللعب</h3>
+              <button onClick={() => setShowHowToPlay(false)} style={{ border: 'none', background: 'transparent', fontSize: 24, cursor: 'pointer' }}>✕</button>
+            </div>
+            <ol style={{ margin: '16px 0 0', paddingInlineStart: 22, fontFamily: 'Cairo, sans-serif', lineHeight: 1.9, color: '#384244', fontWeight: 700 }}>
+              <li>قبل البدء: افتح زر <b>📱 رموز QR</b> ليظهر رابط كل فريق، ثم يدخل كل فريق من جواله على الرابط الخاص به.</li>
+              <li>بعد الضغط على <b>▶ بدء اللعبة</b> يختار النظام أول خلية عشوائياً، وتظهر بطاقة السؤال تلقائياً.</li>
+              <li>كل فريق يضغط الجرس من جهازه، وأول ضغط صحيح يحصل على فرصة الإجابة خلال 10 ثوانٍ.</li>
+              <li>إذا كانت الإجابة صحيحة تُحجز الخلية بلون الفريق. إذا كانت خاطئة تنتقل الفرصة للفريق الآخر.</li>
+              <li><b>شرط الفوز (الاتصال):</b> الفريق الأخضر يوصل مساراً متصلاً من أعلى اللوحة إلى أسفلها، والفريق الأحمر يوصل مساراً متصلاً من اليمين إلى اليسار.</li>
+            </ol>
+          </div>
+        </div>
+      )}
+
       {/* ═══ WINNER BANNER ═══ */}
       {isEnded && state?.winner && (
         <div style={{ maxWidth: 1380, margin: '24px auto 0', padding: '0 24px' }}>
@@ -1045,16 +1073,6 @@ export const HurufMain: React.FC = () => {
         {/* ════ LEFT: BOARD ════ */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {state && <ScorePanel board={state.board} />}
-
-          {/* Direction hints */}
-          <div style={{ display: 'flex', gap: 10 }}>
-            <div className="dir-strip green" style={{ flex: 1 }}>
-              🟢 أخضر: وصّل من أعلى الشبكة إلى أسفلها ↕
-            </div>
-            <div className="dir-strip red" style={{ flex: 1 }}>
-              🔴 أحمر: وصّل من يمين الشبكة إلى يسارها ↔
-            </div>
-          </div>
 
           <div style={{
             background: '#fff', borderRadius: 22,
@@ -1126,6 +1144,18 @@ export const HurufMain: React.FC = () => {
 
         {/* ════ RIGHT SIDEBAR ════ */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          <button
+            onClick={() => setShowHowToPlay(true)}
+            style={{
+              width: '100%', padding: '14px 16px',
+              background: '#fff', border: '2px solid #2D3436', borderRadius: 14, cursor: 'pointer',
+              fontFamily: 'Lalezar, serif', fontSize: 19, color: '#2D3436',
+            }}
+          >
+            📘 كيفية اللعب
+          </button>
+
 
           {/* Start Game (if not playing) */}
           {!isPlaying && !isEnded && (
