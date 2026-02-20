@@ -7,12 +7,12 @@ import type {
   HurufSessionState,
   Team,
 } from '../../shared/huruf/types';
-import questionBank from '../../shared/huruf/questions.ar.json';
+import questionBank from '../../shared/huruf/questions_ar.json';
 
 type SocketMeta = { role: 'main' | 'mobile'; team?: Team };
 
-const GRID_SIZE = 6;
-const TIMER_DURATION_MS = 10000; // 10 seconds
+const GRID_SIZE = 5;
+const TIMER_DURATION_MS = 15000; // 15 seconds
 
 // Letters that have questions
 const ALL_LETTERS = Object.keys(questionBank as Record<string, HurufQuestion[]>);
@@ -137,8 +137,14 @@ export class HurufSessionDO {
       case 'MAIN_MARK_WRONG':
         await this.markWrong();
         return;
+      case 'ANSWER_SUBMIT':
+        await this.handleAnswerSubmit(event.team, event.answer);
+        return;
       case 'MAIN_MARK_CORRECT':
         await this.markCorrect();
+        return;
+      case 'SUBMIT_ANSWER':
+        await this.handleSubmitAnswer(event.team, event.answer);
         return;
       case 'MAIN_RESET_BUZZER':
         await this.resetBuzzer();
@@ -180,6 +186,7 @@ export class HurufSessionDO {
     this.clearTimer();
     this.usedQuestionsByCell.clear();
 
+    // Preserve cumulative wins before resetting round state
     const previousWins = {
       green: this.state.matchWins?.green ?? 0,
       red: this.state.matchWins?.red ?? 0,
@@ -299,12 +306,39 @@ export class HurufSessionDO {
     }
   }
 
+  /**
+   * Mobile player submits a typed answer — DO checks it automatically (fuzzy match).
+   * If correct → triggers markCorrect flow.
+   * If wrong   → triggers markWrong flow.
+   */
+  private async handleSubmitAnswer(team: Team, answer: string) {
+    // Only valid if this team has the buzzer locked
+    if (!this.state.buzzer.locked || this.state.buzzer.lockedBy !== team) return;
+    if (!this.state.activeQuestion) return;
+
+    const correct = this.isAnswerCorrect(answer, this.state.activeQuestion.answer);
+
+    // Broadcast result to all clients so main screen can show feedback
+    this.broadcast({
+      type: 'ANSWER_RESULT',
+      team,
+      answer,
+      correct,
+      correctAnswer: correct ? undefined : this.state.activeQuestion.answer,
+    } as any);
+
+    if (correct) {
+      await this.markCorrect();
+    } else {
+      await this.markWrong();
+    }
+  }
+
   private async markWrong() {
     if (!this.state.activeCellId) return;
     this.clearTimer();
 
     if (this.state.stage === 'first') {
-      const otherTeam: Team = this.state.buzzer.lockedBy === 'green' ? 'red' : 'green';
       this.state.stage = 'other';
       this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
     } else {
@@ -337,6 +371,12 @@ export class HurufSessionDO {
 
     const won = this.checkWin(team);
     if (won) {
+      // ✅ FIX: Increment matchWins BEFORE setting status to 'ended'
+      // so the DO state already has the correct cumulative score
+      this.state.matchWins = {
+        green: (this.state.matchWins?.green ?? 0) + (team === 'green' ? 1 : 0),
+        red:   (this.state.matchWins?.red   ?? 0) + (team === 'red'   ? 1 : 0),
+      };
       this.state.status = 'ended';
       this.state.winner = team;
       this.broadcast({ type: 'GAME_ENDED', winner: team });
@@ -354,8 +394,81 @@ export class HurufSessionDO {
     this.broadcastState();
   }
 
+  /**
+   * Normalize Arabic text for fuzzy comparison:
+   * - Remove diacritics (tashkeel)
+   * - Normalize alef variants → ا
+   * - Normalize teh marbuta → ه
+   * - Remove tatweel
+   * - Lowercase + trim
+   */
+  private normalizeArabic(text: string): string {
+    return text
+      .trim()
+      .replace(/[\u064B-\u065F\u0670]/g, '')   // diacritics
+      .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627') // alef variants → ا
+      .replace(/\u0629/g, '\u0647')              // teh marbuta → ه
+      .replace(/\u0640/g, '')                    // tatweel
+      .replace(/\s+/g, ' ')
+      .toLowerCase();
+  }
+
+  /** Check if submitted answer matches the correct answer (fuzzy) */
+  private isAnswerCorrect(submitted: string, correct: string): boolean {
+    const a = this.normalizeArabic(submitted);
+    const b = this.normalizeArabic(correct);
+    if (a === b) return true;
+
+    // Check if one contains the other (partial match)
+    if (a.includes(b) || b.includes(a)) return true;
+
+    // Simple edit distance for short answers (≤ 12 chars)
+    if (b.length <= 12) {
+      const dist = this.levenshtein(a, b);
+      const threshold = Math.floor(b.length * 0.25); // allow 25% deviation
+      if (dist <= Math.max(1, threshold)) return true;
+    }
+
+    return false;
+  }
+
+  private levenshtein(a: string, b: string): number {
+    const m = a.length, n = b.length;
+    const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
+      Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+    );
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        dp[i][j] = a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+    return dp[m][n];
+  }
+
+  private async handleAnswerSubmit(team: Team, answer: string) {
+    if (!this.state.buzzer.locked || this.state.buzzer.lockedBy !== team) return;
+    if (!this.state.activeQuestion) return;
+
+    const correct = this.isAnswerCorrect(answer, this.state.activeQuestion.answer);
+
+    this.broadcast({
+      type: 'ANSWER_RESULT',
+      team,
+      answer,
+      correct,
+      correctAnswer: this.state.activeQuestion.answer,
+    });
+
+    if (correct) {
+      await this.markCorrect();
+    } else {
+      await this.markWrong();
+    }
+  }
+
   private clearTimer() {
-    if (this.timerHandle !== null) {
       clearTimeout(this.timerHandle);
       this.timerHandle = null;
     }
@@ -388,7 +501,21 @@ export class HurufSessionDO {
   }
 
   private resetBoardCells(board: HurufCell[]): HurufCell[] {
-    const shuffledLetters = shuffle(board.map((cell) => cell.letter));
+    // Re-generate fully unique letters (same logic as createBoard)
+    const totalCells = board.length;
+    let selectedLetters: string[];
+    if (ALL_LETTERS.length >= totalCells) {
+      selectedLetters = shuffle(ALL_LETTERS).slice(0, totalCells);
+    } else {
+      selectedLetters = [...ALL_LETTERS];
+      const extra = shuffle(ALL_LETTERS);
+      let i = 0;
+      while (selectedLetters.length < totalCells) {
+        selectedLetters.push(extra[i % extra.length]);
+        i++;
+      }
+    }
+    const shuffledLetters = shuffle(selectedLetters);
 
     return board.map((cell, index) => ({
       ...cell,
@@ -399,33 +526,25 @@ export class HurufSessionDO {
   }
 
   private createBoard(): HurufCell[] {
-    // Random letters from the supported question set, distributed as evenly as possible.
-    const totalCells = GRID_SIZE * GRID_SIZE;
-    const baseCount = Math.floor(totalCells / ALL_LETTERS.length);
-    const remainder = totalCells % ALL_LETTERS.length;
+    const totalCells = GRID_SIZE * GRID_SIZE; // 25
 
-    const lettersPool: string[] = [];
-    const randomizedLetters = shuffle(ALL_LETTERS);
-    randomizedLetters.forEach((letter, index) => {
-      const count = baseCount + (index < remainder ? 1 : 0);
-      for (let i = 0; i < count; i++) lettersPool.push(letter);
-    });
-
-    let shuffledLetters = shuffle(lettersPool);
-
-    // Best effort to reduce immediate horizontal duplicates.
-    for (let attempt = 0; attempt < 10; attempt++) {
-      let hasAdjacentDuplicate = false;
-      for (let i = 1; i < shuffledLetters.length; i++) {
-        const sameRow = Math.floor(i / GRID_SIZE) === Math.floor((i - 1) / GRID_SIZE);
-        if (sameRow && shuffledLetters[i] === shuffledLetters[i - 1]) {
-          hasAdjacentDuplicate = true;
-          break;
-        }
+    // Each cell gets a UNIQUE letter — no repeats across the entire board.
+    let selectedLetters: string[];
+    if (ALL_LETTERS.length >= totalCells) {
+      // Pick exactly totalCells distinct letters randomly
+      selectedLetters = shuffle(ALL_LETTERS).slice(0, totalCells);
+    } else {
+      // Not enough unique letters: use all, then fill with minimal repeats
+      selectedLetters = [...ALL_LETTERS];
+      const extra = shuffle(ALL_LETTERS);
+      let i = 0;
+      while (selectedLetters.length < totalCells) {
+        selectedLetters.push(extra[i % extra.length]);
+        i++;
       }
-      if (!hasAdjacentDuplicate) break;
-      shuffledLetters = shuffle(lettersPool);
     }
+
+    const shuffledLetters = shuffle(selectedLetters);
 
     const cells: HurufCell[] = [];
     for (let row = 0; row < GRID_SIZE; row++) {
@@ -463,9 +582,11 @@ export class HurufSessionDO {
   }
 
   /**
-   * Win condition:
-   * Green team: must connect TOP row to BOTTOM row
-   * Red team: must connect LEFT column to RIGHT column
+   * Win condition (UPDATED - REVERSED):
+   * 🟢 Green team:  must connect TOP row      → BOTTOM row    (vertical path)
+   * 🟠 Orange/Red:  must connect LEFT column  → RIGHT column  (horizontal path)
+   *
+   * Board orientation: green triangles top & bottom, orange triangles left & right.
    */
   private checkWin(team: Team): boolean {
     const owned = new Map(this.state.board.map((cell) => [cell.id, cell.owner]));
@@ -476,8 +597,9 @@ export class HurufSessionDO {
       if (owned.get(cell.id) !== team) continue;
       const row = Number(cell.id.split('-')[0]);
       const col = Number(cell.id.split('-')[1]);
-      // Green: starts from top row (row === 0)
-      // Red: starts from left column (col === 0)
+
+      // 🟢 Green starts from top row (row === 0)
+      // 🟠 Orange starts from left column (col === 0)
       const starts = team === 'green' ? row === 0 : col === 0;
       if (starts) {
         queue.push(cell.id);
@@ -489,7 +611,9 @@ export class HurufSessionDO {
       const id = queue.shift() as string;
       const row = Number(id.split('-')[0]);
       const col = Number(id.split('-')[1]);
-      // Green: reaches bottom row; Red: reaches right column
+
+      // 🟢 Green reaches bottom row
+      // 🟠 Orange reaches right column
       const reached = team === 'green' ? row === GRID_SIZE - 1 : col === GRID_SIZE - 1;
       if (reached) return true;
 
