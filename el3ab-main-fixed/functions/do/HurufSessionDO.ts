@@ -1,5 +1,4 @@
 import type {
-  BuzzStage,
   HurufCell,
   HurufClientEvent,
   HurufQuestion,
@@ -14,7 +13,6 @@ type SocketMeta = { role: 'main' | 'mobile'; team?: Team };
 const GRID_SIZE = 5;
 const TIMER_DURATION_MS = 15000; // 15 seconds
 
-// Letters that have questions
 const ALL_LETTERS = Object.keys(questionBank as Record<string, HurufQuestion[]>);
 
 function shuffle<T>(arr: T[]): T[] {
@@ -40,11 +38,14 @@ export class HurufSessionDO {
     const url = new URL(request.url);
 
     if (url.pathname.endsWith('/init') && request.method === 'POST') {
-      const initPayload = (await request.json().catch(() => ({}))) as { matchWins?: { green?: number; red?: number } };
+      const initPayload = (await request.json().catch(() => ({}))) as {
+        matchWins?: { green?: number; red?: number };
+      };
       await this.restoreOrInit(initPayload.matchWins);
-      return new Response(JSON.stringify({ ok: true, sessionId: this.state.sessionId }), {
-        headers: { 'content-type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ ok: true, sessionId: this.state.sessionId }),
+        { headers: { 'content-type': 'application/json' } }
+      );
     }
 
     if (request.headers.get('Upgrade') === 'websocket') {
@@ -59,7 +60,7 @@ export class HurufSessionDO {
   }
 
   private buildInitialState(sessionId = this.stateStore.id.toString()): HurufSessionState {
-    const board = this.createBoard();
+    const board = this.generateBoard();
     return {
       sessionId,
       status: 'lobby',
@@ -79,14 +80,8 @@ export class HurufSessionDO {
   private async restoreOrInit(initialWins?: { green?: number; red?: number }) {
     const saved = await this.stateStore.storage.get<HurufSessionState>('session_state');
     if (saved) {
-      this.state = {
-        ...saved,
-        matchWins: saved.matchWins ?? { green: 0, red: 0 },
-      };
-      // Persist migrated sessions that existed before `matchWins` was introduced.
-      if (!saved.matchWins) {
-        await this.persistState();
-      }
+      this.state = { ...saved, matchWins: saved.matchWins ?? { green: 0, red: 0 } };
+      if (!saved.matchWins) await this.persistState();
       return;
     }
     this.state = this.buildInitialState();
@@ -109,57 +104,29 @@ export class HurufSessionDO {
         const payload = JSON.parse(String(event.data)) as HurufClientEvent;
         await this.handleEvent(socket, payload);
       } catch {
-        socket.send(
-          JSON.stringify({ type: 'ERROR', message: 'Malformed event payload' } satisfies HurufServerEvent)
-        );
+        socket.send(JSON.stringify({ type: 'ERROR', message: 'Malformed event payload' } satisfies HurufServerEvent));
       }
     });
 
-    socket.addEventListener('close', () => {
-      this.sockets.delete(socket);
-    });
+    socket.addEventListener('close', () => { this.sockets.delete(socket); });
   }
 
   private async handleEvent(socket: WebSocket, event: HurufClientEvent) {
     switch (event.type) {
-      case 'JOIN':
-        this.handleJoin(socket, event);
-        return;
-      case 'BUZZ_REQUEST':
-        await this.handleBuzzRequest(event.team);
-        return;
-      case 'MAIN_START_GAME':
-        await this.startGame();
-        return;
-      case 'MAIN_SELECT_CELL':
-        await this.selectCell(event.cellId);
-        return;
-      case 'MAIN_MARK_WRONG':
-        await this.markWrong();
-        return;
-      case 'ANSWER_SUBMIT':
-        await this.handleAnswerSubmit(event.team, event.answer);
-        return;
-      case 'MAIN_MARK_CORRECT':
-        await this.markCorrect();
-        return;
-      case 'SUBMIT_ANSWER':
-        await this.handleSubmitAnswer(event.team, event.answer);
-        return;
-      case 'MAIN_RESET_BUZZER':
-        await this.resetBuzzer();
-        return;
-      case 'MAIN_NEW_QUESTION':
-        await this.newQuestion();
-        return;
-      case 'TIMER_EXPIRED':
-        await this.handleTimerExpired(event.team);
-        return;
+      case 'JOIN':               this.handleJoin(socket, event); return;
+      case 'BUZZ_REQUEST':       await this.handleBuzzRequest(event.team); return;
+      case 'MAIN_START_GAME':    await this.startGame(); return;
+      case 'MAIN_SELECT_CELL':   await this.selectCell(event.cellId); return;
+      case 'MAIN_MARK_WRONG':    await this.markWrong(); return;
+      case 'MAIN_MARK_CORRECT':  await this.markCorrect(); return;
+      case 'SUBMIT_ANSWER':      await this.handleSubmitAnswer(event.team, event.answer); return;
+      case 'MAIN_RESET_BUZZER':  await this.resetBuzzer(); return;
+      case 'MAIN_NEW_QUESTION':  await this.newQuestion(); return;
+      case 'TIMER_EXPIRED':      await this.handleTimerExpired(event.team); return;
       case 'PING':
         socket.send(JSON.stringify({ type: 'SESSION_STATE', state: this.state } satisfies HurufServerEvent));
         return;
-      default:
-        return;
+      default: return;
     }
   }
 
@@ -167,13 +134,8 @@ export class HurufSessionDO {
     if (event.role === 'mobile' && event.team) {
       for (const [peer, meta] of this.sockets.entries()) {
         if (peer !== socket && meta.role === 'mobile' && meta.team === event.team) {
-          peer.send(
-            JSON.stringify({
-              type: 'ERROR',
-              message: 'تم استبدال هذا الجهاز بجهاز آخر لنفس الفريق.',
-            } satisfies HurufServerEvent)
-          );
-          peer.close(4001, 'Replaced by newer device');
+          peer.send(JSON.stringify({ type: 'ERROR', message: 'تم استبدال هذا الجهاز.' } satisfies HurufServerEvent));
+          peer.close(4001, 'Replaced');
           this.sockets.delete(peer);
         }
       }
@@ -182,29 +144,36 @@ export class HurufSessionDO {
     socket.send(JSON.stringify({ type: 'SESSION_STATE', state: this.state } satisfies HurufServerEvent));
   }
 
+  // ── GAME FLOW ──────────────────────────────
+
   private async startGame() {
     this.clearTimer();
     this.usedQuestionsByCell.clear();
 
-    // Preserve cumulative wins before resetting round state
+    // ✅ Read wins from in-memory state (already updated by markCorrect before persist)
     const previousWins = {
       green: this.state.matchWins?.green ?? 0,
-      red: this.state.matchWins?.red ?? 0,
+      red:   this.state.matchWins?.red   ?? 0,
     };
 
-    // Rebuild round state while preserving cumulative wins across rounds.
-    const freshState = this.buildInitialState(this.state.sessionId);
-    freshState.board = this.resetBoardCells(this.state.board);
-    freshState.matchWins = previousWins;
-    const randomCell = freshState.board[Math.floor(Math.random() * freshState.board.length)] ?? null;
+    const freshBoard = this.generateBoard();
+    const randomCell = freshBoard[Math.floor(Math.random() * freshBoard.length)] ?? null;
 
-    freshState.status = 'playing';
-    freshState.currentTeamTurn = 'green';
-    freshState.activeCellId = randomCell ? randomCell.id : null;
-    freshState.activeQuestion = randomCell ? this.pickQuestionFromBoard(freshState.board, randomCell.id) : null;
-    freshState.updatedAt = Date.now();
+    this.state = {
+      sessionId:        this.state.sessionId,
+      status:           'playing',
+      board:            freshBoard,
+      currentTeamTurn:  'green',
+      activeCellId:     randomCell?.id ?? null,
+      activeQuestion:   randomCell ? this.pickQuestionFromBoard(freshBoard, randomCell.id) : null,
+      buzzer:           { locked: false, lockedBy: null, timerStart: null },
+      attemptNo:        1,
+      stage:            'first',
+      winner:           null,
+      matchWins:        previousWins, // ✅ preserved
+      updatedAt:        Date.now(),
+    };
 
-    this.state = freshState;
     await this.persistState();
     this.broadcastState();
   }
@@ -213,7 +182,6 @@ export class HurufSessionDO {
     if (this.state.status !== 'playing') return;
     const cell = this.state.board.find((c) => c.id === cellId);
     if (!cell || cell.closed) return;
-    // Once a cell is selected, prevent changing to another
     if (this.state.activeCellId && this.state.activeCellId !== cellId) return;
 
     this.state.activeCellId = cellId;
@@ -241,11 +209,7 @@ export class HurufSessionDO {
     this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
     this.state.updatedAt = Date.now();
     await this.persistState();
-    this.broadcast({
-      type: 'QUESTION_CHANGED',
-      cellId: this.state.activeCellId,
-      question,
-    });
+    this.broadcast({ type: 'QUESTION_CHANGED', cellId: this.state.activeCellId, question });
     this.broadcastState();
   }
 
@@ -270,20 +234,17 @@ export class HurufSessionDO {
     this.broadcast({ type: 'TIMER_START', team, durationMs: TIMER_DURATION_MS });
     this.broadcastState();
 
-    // Server-side timer as backup
     this.clearTimer();
     this.timerHandle = setTimeout(async () => {
       await this.handleTimerExpired(team);
-    }, TIMER_DURATION_MS + 500);
+    }, TIMER_DURATION_MS + 1000);
   }
 
   private async handleTimerExpired(team: Team) {
     if (!this.state.buzzer.locked || this.state.buzzer.lockedBy !== team) return;
-
     this.clearTimer();
 
     if (this.state.stage === 'first') {
-      // Give chance to the other team
       const otherTeam: Team = team === 'green' ? 'red' : 'green';
       this.state.stage = 'other';
       this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
@@ -292,12 +253,10 @@ export class HurufSessionDO {
       this.broadcast({ type: 'TIMER_EXPIRED_SERVER', nextTeam: otherTeam });
       this.broadcastState();
     } else {
-      // second team also failed - move to next turn
       this.state.stage = 'first';
       this.state.activeCellId = null;
       this.state.activeQuestion = null;
       this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
-      // Switch turn
       this.state.currentTeamTurn = team === 'green' ? 'red' : 'green';
       this.state.updatedAt = Date.now();
       await this.persistState();
@@ -306,25 +265,19 @@ export class HurufSessionDO {
     }
   }
 
-  /**
-   * Mobile player submits a typed answer — DO checks it automatically (fuzzy match).
-   * If correct → triggers markCorrect flow.
-   * If wrong   → triggers markWrong flow.
-   */
+  /** Mobile auto-submit: server fuzzy-checks the answer */
   private async handleSubmitAnswer(team: Team, answer: string) {
-    // Only valid if this team has the buzzer locked
     if (!this.state.buzzer.locked || this.state.buzzer.lockedBy !== team) return;
     if (!this.state.activeQuestion) return;
 
     const correct = this.isAnswerCorrect(answer, this.state.activeQuestion.answer);
 
-    // Broadcast result to all clients so main screen can show feedback
     this.broadcast({
       type: 'ANSWER_RESULT',
       team,
       answer,
       correct,
-      correctAnswer: correct ? undefined : this.state.activeQuestion.answer,
+      correctAnswer: this.state.activeQuestion.answer,
     } as any);
 
     if (correct) {
@@ -342,7 +295,6 @@ export class HurufSessionDO {
       this.state.stage = 'other';
       this.state.buzzer = { locked: false, lockedBy: null, timerStart: null };
     } else {
-      // Both teams failed - next turn
       this.state.stage = 'first';
       this.state.activeCellId = null;
       this.state.activeQuestion = null;
@@ -362,7 +314,7 @@ export class HurufSessionDO {
 
     this.clearTimer();
 
-    const cell = this.state.board.find((item) => item.id === activeCellId);
+    const cell = this.state.board.find((c) => c.id === activeCellId);
     if (!cell || cell.closed) return;
 
     cell.owner = team;
@@ -371,8 +323,7 @@ export class HurufSessionDO {
 
     const won = this.checkWin(team);
     if (won) {
-      // ✅ FIX: Increment matchWins BEFORE setting status to 'ended'
-      // so the DO state already has the correct cumulative score
+      // ✅ Increment FIRST, then set ended — so broadcastState sends updated wins
       this.state.matchWins = {
         green: (this.state.matchWins?.green ?? 0) + (team === 'green' ? 1 : 0),
         red:   (this.state.matchWins?.red   ?? 0) + (team === 'red'   ? 1 : 0),
@@ -394,41 +345,28 @@ export class HurufSessionDO {
     this.broadcastState();
   }
 
-  /**
-   * Normalize Arabic text for fuzzy comparison:
-   * - Remove diacritics (tashkeel)
-   * - Normalize alef variants → ا
-   * - Normalize teh marbuta → ه
-   * - Remove tatweel
-   * - Lowercase + trim
-   */
+  // ── FUZZY ARABIC MATCHING ──────────────────
+
   private normalizeArabic(text: string): string {
     return text
       .trim()
-      .replace(/[\u064B-\u065F\u0670]/g, '')   // diacritics
-      .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627') // alef variants → ا
-      .replace(/\u0629/g, '\u0647')              // teh marbuta → ه
-      .replace(/\u0640/g, '')                    // tatweel
+      .replace(/[\u064B-\u065F\u0670]/g, '')
+      .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627')
+      .replace(/\u0629/g, '\u0647')
+      .replace(/\u0640/g, '')
       .replace(/\s+/g, ' ')
       .toLowerCase();
   }
 
-  /** Check if submitted answer matches the correct answer (fuzzy) */
   private isAnswerCorrect(submitted: string, correct: string): boolean {
     const a = this.normalizeArabic(submitted);
     const b = this.normalizeArabic(correct);
     if (a === b) return true;
-
-    // Check if one contains the other (partial match)
     if (a.includes(b) || b.includes(a)) return true;
-
-    // Simple edit distance for short answers (≤ 12 chars)
-    if (b.length <= 12) {
+    if (b.length <= 15) {
       const dist = this.levenshtein(a, b);
-      const threshold = Math.floor(b.length * 0.25); // allow 25% deviation
-      if (dist <= Math.max(1, threshold)) return true;
+      if (dist <= Math.max(1, Math.floor(b.length * 0.25))) return true;
     }
-
     return false;
   }
 
@@ -437,135 +375,43 @@ export class HurufSessionDO {
     const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
       Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
     );
-    for (let i = 1; i <= m; i++) {
-      for (let j = 1; j <= n; j++) {
+    for (let i = 1; i <= m; i++)
+      for (let j = 1; j <= n; j++)
         dp[i][j] = a[i - 1] === b[j - 1]
           ? dp[i - 1][j - 1]
           : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-      }
-    }
     return dp[m][n];
   }
 
-  private async handleAnswerSubmit(team: Team, answer: string) {
-    if (!this.state.buzzer.locked || this.state.buzzer.lockedBy !== team) return;
-    if (!this.state.activeQuestion) return;
+  // ── BOARD CREATION ─────────────────────────
 
-    const correct = this.isAnswerCorrect(answer, this.state.activeQuestion.answer);
-
-    this.broadcast({
-      type: 'ANSWER_RESULT',
-      team,
-      answer,
-      correct,
-      correctAnswer: this.state.activeQuestion.answer,
-    });
-
-    if (correct) {
-      await this.markCorrect();
-    } else {
-      await this.markWrong();
-    }
-  }
-
-  private clearTimer() {
-      clearTimeout(this.timerHandle);
-      this.timerHandle = null;
-    }
-  }
-
-  private pickQuestionFromBoard(board: HurufCell[], cellId: string): HurufQuestion | null {
-    const cell = board.find((item) => item.id === cellId);
-    if (!cell) return null;
-
-    const all =
-      (questionBank as Record<string, Array<{ id: string; prompt: string; answer: string }>>)[cell.letter] ?? [];
-    if (!all.length) return null;
-
-    const used = this.usedQuestionsByCell.get(cellId) ?? [];
-    let candidates = all.filter((q) => !used.includes(q.id));
-    if (!candidates.length) {
-      this.usedQuestionsByCell.set(cellId, []);
-      candidates = [...all];
-    }
-
-    const next = candidates[Math.floor(Math.random() * candidates.length)];
-    const updatedUsed = [...(this.usedQuestionsByCell.get(cellId) ?? []), next.id];
-    this.usedQuestionsByCell.set(cellId, updatedUsed);
-
-    return { ...next, letter: cell.letter };
-  }
-
-  private pickQuestion(cellId: string): HurufQuestion | null {
-    return this.pickQuestionFromBoard(this.state.board, cellId);
-  }
-
-  private resetBoardCells(board: HurufCell[]): HurufCell[] {
-    // Re-generate fully unique letters (same logic as createBoard)
-    const totalCells = board.length;
-    let selectedLetters: string[];
-    if (ALL_LETTERS.length >= totalCells) {
-      selectedLetters = shuffle(ALL_LETTERS).slice(0, totalCells);
-    } else {
-      selectedLetters = [...ALL_LETTERS];
-      const extra = shuffle(ALL_LETTERS);
-      let i = 0;
-      while (selectedLetters.length < totalCells) {
-        selectedLetters.push(extra[i % extra.length]);
-        i++;
-      }
-    }
-    const shuffledLetters = shuffle(selectedLetters);
-
-    return board.map((cell, index) => ({
-      ...cell,
-      letter: shuffledLetters[index] ?? cell.letter,
-      owner: null,
-      closed: false,
-    }));
-  }
-
-  private createBoard(): HurufCell[] {
+  /**
+   * 5×5 honeycomb board.
+   * Each cell gets a UNIQUE letter from questions_ar.json (no repeats).
+   */
+  private generateBoard(): HurufCell[] {
     const totalCells = GRID_SIZE * GRID_SIZE; // 25
 
-    // Each cell gets a UNIQUE letter — no repeats across the entire board.
-    let selectedLetters: string[];
+    let letters: string[];
     if (ALL_LETTERS.length >= totalCells) {
-      // Pick exactly totalCells distinct letters randomly
-      selectedLetters = shuffle(ALL_LETTERS).slice(0, totalCells);
+      letters = shuffle(ALL_LETTERS).slice(0, totalCells);
     } else {
-      // Not enough unique letters: use all, then fill with minimal repeats
-      selectedLetters = [...ALL_LETTERS];
+      letters = [...ALL_LETTERS];
       const extra = shuffle(ALL_LETTERS);
       let i = 0;
-      while (selectedLetters.length < totalCells) {
-        selectedLetters.push(extra[i % extra.length]);
-        i++;
-      }
+      while (letters.length < totalCells) letters.push(extra[i++ % extra.length]);
     }
-
-    const shuffledLetters = shuffle(selectedLetters);
+    letters = shuffle(letters);
 
     const cells: HurufCell[] = [];
     for (let row = 0; row < GRID_SIZE; row++) {
       for (let col = 0; col < GRID_SIZE; col++) {
-        const id = `${row}-${col}`;
-        const letter = shuffledLetters[row * GRID_SIZE + col];
-        cells.push({ id, letter, owner: null, closed: false, neighbors: [] });
+        cells.push({ id: `${row}-${col}`, letter: letters[row * GRID_SIZE + col], owner: null, closed: false, neighbors: [] });
       }
     }
 
-    // Pointy-top hex neighbors
-    const offsetsEven = [
-      [-1, -1], [-1, 0],
-      [0, -1],  [0, 1],
-      [1, -1],  [1, 0],
-    ];
-    const offsetsOdd = [
-      [-1, 0],  [-1, 1],
-      [0, -1],  [0, 1],
-      [1, 0],   [1, 1],
-    ];
+    const offsetsEven = [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]];
+    const offsetsOdd  = [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
 
     for (let row = 0; row < GRID_SIZE; row++) {
       for (let col = 0; col < GRID_SIZE; col++) {
@@ -581,53 +427,68 @@ export class HurufSessionDO {
     return cells;
   }
 
+  // ── WIN DETECTION ──────────────────────────
+
   /**
-   * Win condition (UPDATED - REVERSED):
-   * 🟢 Green team:  must connect TOP row      → BOTTOM row    (vertical path)
-   * 🟠 Orange/Red:  must connect LEFT column  → RIGHT column  (horizontal path)
-   *
-   * Board orientation: green triangles top & bottom, orange triangles left & right.
+   * 🟢 Green  wins by connecting TOP row    → BOTTOM row  (board: top & bottom = green)
+   * 🟠 Orange wins by connecting LEFT col   → RIGHT col   (board: left & right = orange)
    */
   private checkWin(team: Team): boolean {
-    const owned = new Map(this.state.board.map((cell) => [cell.id, cell.owner]));
+    const owned = new Map(this.state.board.map((c) => [c.id, c.owner]));
     const queue: string[] = [];
     const visited = new Set<string>();
 
     for (const cell of this.state.board) {
       if (owned.get(cell.id) !== team) continue;
-      const row = Number(cell.id.split('-')[0]);
-      const col = Number(cell.id.split('-')[1]);
-
-      // 🟢 Green starts from top row (row === 0)
-      // 🟠 Orange starts from left column (col === 0)
-      const starts = team === 'green' ? row === 0 : col === 0;
-      if (starts) {
-        queue.push(cell.id);
-        visited.add(cell.id);
-      }
+      const [row, col] = cell.id.split('-').map(Number);
+      const isStart = team === 'green' ? row === 0 : col === 0;
+      if (isStart) { queue.push(cell.id); visited.add(cell.id); }
     }
 
     while (queue.length) {
-      const id = queue.shift() as string;
-      const row = Number(id.split('-')[0]);
-      const col = Number(id.split('-')[1]);
-
-      // 🟢 Green reaches bottom row
-      // 🟠 Orange reaches right column
+      const id = queue.shift()!;
+      const [row, col] = id.split('-').map(Number);
       const reached = team === 'green' ? row === GRID_SIZE - 1 : col === GRID_SIZE - 1;
       if (reached) return true;
 
-      const cell = this.state.board.find((item) => item.id === id);
+      const cell = this.state.board.find((c) => c.id === id);
       if (!cell) continue;
       for (const neighbor of cell.neighbors) {
-        if (visited.has(neighbor)) continue;
-        if (owned.get(neighbor) !== team) continue;
+        if (visited.has(neighbor) || owned.get(neighbor) !== team) continue;
         visited.add(neighbor);
         queue.push(neighbor);
       }
     }
 
     return false;
+  }
+
+  // ── QUESTION PICKING ───────────────────────
+
+  private pickQuestionFromBoard(board: HurufCell[], cellId: string): HurufQuestion | null {
+    const cell = board.find((c) => c.id === cellId);
+    if (!cell) return null;
+
+    const all = (questionBank as Record<string, Array<{ id: string; prompt: string; answer: string }>>)[cell.letter] ?? [];
+    if (!all.length) return null;
+
+    const used = this.usedQuestionsByCell.get(cellId) ?? [];
+    let candidates = all.filter((q) => !used.includes(q.id));
+    if (!candidates.length) { this.usedQuestionsByCell.set(cellId, []); candidates = [...all]; }
+
+    const next = candidates[Math.floor(Math.random() * candidates.length)];
+    this.usedQuestionsByCell.set(cellId, [...used, next.id]);
+    return { ...next, letter: cell.letter };
+  }
+
+  private pickQuestion(cellId: string): HurufQuestion | null {
+    return this.pickQuestionFromBoard(this.state.board, cellId);
+  }
+
+  // ── STORAGE & BROADCAST ────────────────────
+
+  private clearTimer() {
+    if (this.timerHandle !== null) { clearTimeout(this.timerHandle); this.timerHandle = null; }
   }
 
   private async persistState() {
@@ -641,7 +502,7 @@ export class HurufSessionDO {
   private broadcast(event: HurufServerEvent) {
     const msg = JSON.stringify(event);
     for (const socket of this.sockets.keys()) {
-      socket.send(msg);
+      try { socket.send(msg); } catch { /* ignore */ }
     }
   }
 }
