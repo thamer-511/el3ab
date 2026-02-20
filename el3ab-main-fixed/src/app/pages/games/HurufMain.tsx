@@ -11,7 +11,7 @@ import type { HurufSendResult } from '../../lib/huruf';
 /* ─────────────────────────────────────────
    CONSTANTS
 ───────────────────────────────────────── */
-const TIMER_DURATION = 10; // seconds
+const TIMER_DURATION = 15; // seconds
 
 /* ─────────────────────────────────────────
    CSS
@@ -301,19 +301,19 @@ function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
         </defs>
 
         {/*
-          ✅ FIXED Board background orientation:
-          Green  = left column → right column  → left & right triangles = green
-          Orange = top row    → bottom row     → top & bottom triangles = orange
+          ✅ UPDATED Board background orientation:
+          Green  = top row → bottom row    → top & bottom triangles = green
+          Orange = left col → right col   → left & right triangles = orange
         */}
         <rect width={svgW} height={svgH} fill="#4a6b38" />
-        {/* Top triangle = orange (orange team wins top→bottom) */}
-        <polygon points={`0,0 ${svgW},0 ${cx0},${cy0}`} fill="#b86e20" />
-        {/* Bottom triangle = orange */}
-        <polygon points={`0,${svgH} ${svgW},${svgH} ${cx0},${cy0}`} fill="#b86e20" />
-        {/* Left triangle = green (green team wins left→right) */}
-        <polygon points={`0,0 0,${svgH} ${cx0},${cy0}`} fill="#4a6b38" />
-        {/* Right triangle = green */}
-        <polygon points={`${svgW},0 ${svgW},${svgH} ${cx0},${cy0}`} fill="#4a6b38" />
+        {/* Top triangle = green (green team wins top→bottom) */}
+        <polygon points={`0,0 ${svgW},0 ${cx0},${cy0}`} fill="#4a6b38" />
+        {/* Bottom triangle = green */}
+        <polygon points={`0,${svgH} ${svgW},${svgH} ${cx0},${cy0}`} fill="#4a6b38" />
+        {/* Left triangle = orange (orange team wins left→right) */}
+        <polygon points={`0,0 0,${svgH} ${cx0},${cy0}`} fill="#b86e20" />
+        {/* Right triangle = orange */}
+        <polygon points={`${svgW},0 ${svgW},${svgH} ${cx0},${cy0}`} fill="#b86e20" />
 
         {rows.map((row, r) => {
           const shift = r % 2 === 1 ? oddShift : 0;
@@ -474,6 +474,8 @@ function QuestionOverlay({
   onWrong,
   onNewQuestion,
   onResetBuzzer,
+  onAnswerSubmit,
+  answerResult,
 }: {
   state: HurufSessionState;
   timer: number;
@@ -482,7 +484,11 @@ function QuestionOverlay({
   onWrong: () => void;
   onNewQuestion: () => void;
   onResetBuzzer: () => void;
+  onAnswerSubmit: (team: Team, answer: string) => void;
+  answerResult: { correct: boolean; answer: string; correctAnswer: string } | null;
 }) {
+  const [inputAnswer, setInputAnswer] = React.useState('');
+
   if (!state.activeCellId) return null;
 
   const question = state.activeQuestion;
@@ -490,7 +496,6 @@ function QuestionOverlay({
   const stage = state.stage;
   const stageBg = stage === 'first' ? '#6A8D56' : '#E08C36';
   const stageLabel = stage === 'first' ? 'الفرصة الأولى' : 'فرصة الفريق الآخر';
-  // ✅ orange label instead of red
   const lockedByLabel =
     lockedBy === 'green'  ? 'الفريق الأخضر'    :
     lockedBy === 'red'    ? 'الفريق البرتقالي'  : null;
@@ -499,6 +504,12 @@ function QuestionOverlay({
   const timerColor =
     timerPercent > 0.5  ? '#6A8D56' :
     timerPercent > 0.25 ? '#E08C36' : '#E67E22';
+
+  const handleSubmitAnswer = () => {
+    if (!locked || !lockedBy || !inputAnswer.trim()) return;
+    onAnswerSubmit(lockedBy, inputAnswer.trim());
+    setInputAnswer('');
+  };
 
   return (
     <div className="question-overlay">
@@ -549,7 +560,75 @@ function QuestionOverlay({
           </div>
         )}
 
-        {/* Buzzer status */}
+        {/* Answer input - shown when buzzer is locked and timer is active */}
+        {locked && lockedBy && timerActive && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              background: `${lockedColor}12`,
+              border: `2px solid ${lockedColor}`,
+              borderRadius: 12, padding: '8px 12px', marginBottom: 8,
+            }}>
+              <span style={{ fontSize: 20 }}>🔔</span>
+              <span style={{ fontFamily: 'Lalezar, serif', fontSize: 16, color: lockedColor }}>
+                {lockedByLabel} ضغط الجرس!
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="text"
+                value={inputAnswer}
+                onChange={e => setInputAnswer(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSubmitAnswer()}
+                placeholder="اكتب الجواب هنا..."
+                dir="rtl"
+                style={{
+                  flex: 1, padding: '10px 14px',
+                  fontFamily: 'Cairo, sans-serif', fontSize: 16,
+                  border: `2px solid ${lockedColor}`, borderRadius: 10,
+                  outline: 'none', background: '#fff',
+                  direction: 'rtl',
+                }}
+              />
+              <button
+                onClick={handleSubmitAnswer}
+                disabled={!inputAnswer.trim()}
+                style={{
+                  padding: '10px 18px',
+                  background: inputAnswer.trim() ? `linear-gradient(135deg,${lockedColor},${lockedColor}cc)` : '#ececec',
+                  border: `2px solid ${inputAnswer.trim() ? lockedColor : '#ddd'}`,
+                  borderRadius: 10, cursor: inputAnswer.trim() ? 'pointer' : 'default',
+                  fontFamily: 'Lalezar, serif', fontSize: 16,
+                  color: inputAnswer.trim() ? '#fff' : '#bbb',
+                }}
+              >
+                إرسال
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Answer result feedback */}
+        {answerResult && (
+          <div style={{
+            marginTop: 12,
+            background: answerResult.correct ? '#6A8D5618' : '#E08C3618',
+            border: `2px solid ${answerResult.correct ? '#6A8D56' : '#E08C36'}`,
+            borderRadius: 12, padding: '10px 16px',
+            fontFamily: 'Cairo, sans-serif',
+          }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: answerResult.correct ? '#6A8D56' : '#E08C36' }}>
+              {answerResult.correct ? '✅ إجابة صحيحة!' : '❌ إجابة خاطئة'}
+            </div>
+            {!answerResult.correct && (
+              <div style={{ fontSize: 13, color: '#666', marginTop: 4 }}>
+                الجواب الصحيح: <strong>{answerResult.correctAnswer}</strong>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Buzzer status (not active timer) */}
         {locked && lockedBy && !timerActive && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 10,
@@ -691,7 +770,7 @@ function QrLobby({
           }}>
             <div style={{ fontFamily: 'Lalezar, serif', fontSize: 15, color: '#6A8D56' }}>🟢 الأخضر</div>
             <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 12, color: '#5F6A56', marginTop: 4 }}>
-              يمين ← يسار
+              أعلى ↓ أسفل
             </div>
           </div>
           <div style={{
@@ -700,7 +779,7 @@ function QrLobby({
           }}>
             <div style={{ fontFamily: 'Lalezar, serif', fontSize: 15, color: '#E08C36' }}>🟠 البرتقالي</div>
             <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 12, color: '#b86e20', marginTop: 4 }}>
-              أعلى ↓ أسفل
+              يمين ← يسار
             </div>
           </div>
         </div>
@@ -746,6 +825,7 @@ export const HurufMain: React.FC = () => {
   const [timer, setTimer]           = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [timerTeam, setTimerTeam]   = useState<Team | null>(null);
+  const [answerResult, setAnswerResult] = useState<{ correct: boolean; answer: string; correctAnswer: string } | null>(null);
 
   const toastRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -803,13 +883,23 @@ export const HurufMain: React.FC = () => {
       const socket = connectHurufSocket(id, (event: HurufServerEvent) => {
         if (event.type === 'SESSION_STATE') {
           setState(event.state);
-          if (!event.state.buzzer.locked) stopTimer();
+          if (!event.state.buzzer.locked) {
+            stopTimer();
+            // Clear answer result after a short delay when buzzer resets
+            setTimeout(() => setAnswerResult(null), 2000);
+          }
         }
         if (event.type === 'TIMER_START') {
           startTimer(event.team);
+          setAnswerResult(null);
         }
         if (event.type === 'BUZZ_RESET' || event.type === 'TIMER_EXPIRED_SERVER') {
           stopTimer();
+        }
+        // @ts-ignore - ANSWER_RESULT is a new event type
+        if (event.type === 'ANSWER_RESULT') {
+          // @ts-ignore
+          setAnswerResult({ correct: event.correct, answer: event.answer, correctAnswer: event.correctAnswer });
         }
       });
 
@@ -914,6 +1004,10 @@ export const HurufMain: React.FC = () => {
     sendEvent({ type } as HurufClientEvent, label);
   };
 
+  const handleAnswerSubmit = (team: Team, answer: string) => {
+    sendEvent({ type: 'ANSWER_SUBMIT' as HurufClientEvent['type'], team, answer } as HurufClientEvent);
+  };
+
   const selectCell = (cellId: string) => {
     sendEvent({ type: 'MAIN_SELECT_CELL', cellId });
   };
@@ -924,17 +1018,10 @@ export const HurufMain: React.FC = () => {
   };
   const handleLobbySkip = () => setShowLobby(false);
 
-  const handlePlayAgain = async () => {
+  const handlePlayAgain = () => {
     stopTimer();
-    try {
-      const { sessionId: newSessionId } = await createHurufSession({
-        matchWins: displayedWins,
-      });
-      connectToSessionRef.current?.(newSessionId);
-      showToast('↺ لعبة جديدة برمز جلسة جديد!');
-    } catch {
-      showToast('⚠️ تعذر إنشاء جلسة جديدة');
-    }
+    // ✅ FIX: Send MAIN_START_GAME on the same DO — it preserves matchWins internally
+    sendEvent({ type: 'MAIN_START_GAME' }, '↺ جولة جديدة!');
   };
 
   const displayedWins = useMemo(() => getCarriedWins(state), [state]);
@@ -1078,6 +1165,8 @@ export const HurufMain: React.FC = () => {
           onWrong={() => onControl('MAIN_MARK_WRONG', '✗ إجابة خاطئة')}
           onNewQuestion={() => onControl('MAIN_NEW_QUESTION', '↻ سؤال جديد')}
           onResetBuzzer={() => { stopTimer(); onControl('MAIN_RESET_BUZZER', '⊘ أعيد الجرس'); }}
+          onAnswerSubmit={handleAnswerSubmit}
+          answerResult={answerResult}
         />
       )}
 
