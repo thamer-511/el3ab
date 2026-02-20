@@ -37,6 +37,7 @@ export interface HurufSessionState {
   stage: BuzzStage;
   winner: Team | null;
   matchWins: { green: number; red: number };
+  autoJudge: boolean;
   updatedAt: number;
 }
 
@@ -50,6 +51,7 @@ export type HurufClientEvent =
   | { type: 'MAIN_MARK_WRONG' }
   | { type: 'MAIN_NEW_QUESTION' }
   | { type: 'MAIN_RESET_BUZZER' }
+  | { type: 'MAIN_TOGGLE_AUTO_JUDGE' }
   | { type: 'TIMER_EXPIRED'; team: Team }
   | { type: 'PING' };
 
