@@ -29,9 +29,6 @@ const HURUF_CSS = `
     --cream:       #FDF8E8;
     --tan:         #F3EAD3;
     --tan2:        #e8dfc4;
-    --red:         #E67E22;
-    --red-dark:    #B85C0A;
-    --red-glow:    rgba(230,126,34,0.35);
   }
 
   .huruf-root * { box-sizing: border-box; }
@@ -66,22 +63,6 @@ const HURUF_CSS = `
   .hc-active-glow {
     animation: activeGlow 1.2s ease infinite alternate;
   }
-
-  /* ══════ DIRECTION STRIPS ══════ */
-  .dir-strip {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-family: 'Lalezar', serif;
-    font-size: 14px;
-    color: #fff;
-    margin-bottom: 10px;
-  }
-  .dir-strip.green { background: var(--green); }
-  .dir-strip.red   { background: var(--red); }
 
   /* ══════ QUESTION OVERLAY ══════ */
   .question-overlay {
@@ -160,38 +141,6 @@ const HURUF_CSS = `
     margin: 20px 0;
   }
 
-  /* ══════ BUZZER PANEL ══════ */
-  .buzzer-panel {
-    background: #fff;
-    border-radius: 16px;
-    border: 3px solid var(--tan2);
-    padding: 16px 20px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-
-  .buzzer-icon {
-    font-size: 32px;
-    transition: transform 0.2s;
-  }
-  .buzzer-locked .buzzer-icon { transform: scale(1.2); }
-
-  .buzzer-timer-bar {
-    flex: 1;
-    height: 8px;
-    background: #f0ebe0;
-    border-radius: 8px;
-    overflow: hidden;
-    margin-top: 6px;
-  }
-
-  .buzzer-timer-fill {
-    height: 100%;
-    border-radius: 8px;
-    transition: width 0.1s linear, background 0.3s;
-  }
-
   /* ══════ CONTROL BTNS ══════ */
   .ctrl-btn {
     flex: 1;
@@ -266,8 +215,7 @@ const COLS = 6;
 const ROWS = 6;
 
 function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
-  // Geometry (pointy-top, row-stagger) — matches your “Perfect” reference math style.
-  const R = 50; // circumradius
+  const R = 50;
   const W = R * Math.sqrt(3);
   const H = 2 * R;
   const stepX = W;
@@ -310,7 +258,8 @@ function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
       return { fill: '#6A8D56', innerFill: '#6A8D56', stroke: '#111', text: '#ffffff', ring: false };
     }
     if (cell.closed && cell.owner === 'red') {
-      return { fill: '#E67E22', innerFill: '#E67E22', stroke: '#111', text: '#ffffff', ring: false };
+      // ✅ orange color for red team
+      return { fill: '#E08C36', innerFill: '#E08C36', stroke: '#111', text: '#ffffff', ring: false };
     }
     if (cell.closed) {
       return { fill: '#e0ddd4', innerFill: '#e0ddd4', stroke: '#111', text: '#777777', ring: false };
@@ -351,10 +300,20 @@ function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
           </filter>
         </defs>
 
-        {/* Background like your HTML demo */}
-        <rect width={svgW} height={svgH} fill="#2e7d32" />
-        <polygon points={`0,0 ${svgW},0 ${cx0},${cy0}`} fill="#e65100" />
-        <polygon points={`0,${svgH} ${svgW},${svgH} ${cx0},${cy0}`} fill="#e65100" />
+        {/*
+          ✅ FIXED Board background orientation:
+          Green  = left column → right column  → left & right triangles = green
+          Orange = top row    → bottom row     → top & bottom triangles = orange
+        */}
+        <rect width={svgW} height={svgH} fill="#4a6b38" />
+        {/* Top triangle = orange (orange team wins top→bottom) */}
+        <polygon points={`0,0 ${svgW},0 ${cx0},${cy0}`} fill="#b86e20" />
+        {/* Bottom triangle = orange */}
+        <polygon points={`0,${svgH} ${svgW},${svgH} ${cx0},${cy0}`} fill="#b86e20" />
+        {/* Left triangle = green (green team wins left→right) */}
+        <polygon points={`0,0 0,${svgH} ${cx0},${cy0}`} fill="#4a6b38" />
+        {/* Right triangle = green */}
+        <polygon points={`${svgW},0 ${svgW},${svgH} ${cx0},${cy0}`} fill="#4a6b38" />
 
         {rows.map((row, r) => {
           const shift = r % 2 === 1 ? oddShift : 0;
@@ -365,7 +324,6 @@ function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
             const isActive = cell.id === activeCellId;
             const st = getCellStyle(cell, isActive);
             const isDisabled = cell.closed || !isPlaying || (!!activeCellId && !isActive);
-            const isDimmed = !cell.closed && isDisabled;
 
             return (
               <g
@@ -433,7 +391,7 @@ function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
 function ScorePanel({ greenWins, redWins }: { greenWins: number; redWins: number }) {
   const total = Math.max(1, greenWins + redWins);
   const greenWidth = (greenWins / total) * 100;
-  const redWidth = (redWins / total) * 100;
+  const redWidth   = (redWins   / total) * 100;
 
   return (
     <div style={{
@@ -461,8 +419,7 @@ function ScorePanel({ greenWins, redWins }: { greenWins: number; redWins: number
           <div style={{
             position: 'absolute',
             insetInlineStart: 0,
-            top: 0,
-            bottom: 0,
+            top: 0, bottom: 0,
             width: `${greenWidth}%`,
             background: 'linear-gradient(90deg,#6A8D56,#4a6b38)',
             transition: 'width .5s ease',
@@ -470,29 +427,24 @@ function ScorePanel({ greenWins, redWins }: { greenWins: number; redWins: number
           <div style={{
             position: 'absolute',
             insetInlineEnd: 0,
-            top: 0,
-            bottom: 0,
+            top: 0, bottom: 0,
             width: `${redWidth}%`,
-            background: 'linear-gradient(90deg,#B85C0A,#E67E22)',
+            background: 'linear-gradient(90deg,#b86e20,#E08C36)',
             transition: 'width .5s ease',
           }} />
           <div style={{
             position: 'absolute',
-            left: '50%',
-            top: -3,
-            bottom: -3,
+            left: '50%', top: -3, bottom: -3,
             width: 2,
             transform: 'translateX(-50%)',
             background: 'rgba(45,52,54,.35)',
           }} />
           <div style={{
             position: 'absolute',
-            left: '50%',
-            top: '50%',
+            left: '50%', top: '50%',
             transform: 'translate(-50%, -50%)',
             fontFamily: 'Lalezar, serif',
-            fontSize: 12,
-            color: '#fff',
+            fontSize: 12, color: '#fff',
             textShadow: '0 1px 2px rgba(0,0,0,.35)',
             letterSpacing: '.3px',
           }}>
@@ -501,7 +453,7 @@ function ScorePanel({ greenWins, redWins }: { greenWins: number; redWins: number
         </div>
       </div>
       <div style={{ textAlign: 'center', minWidth: 64 }}>
-        <div style={{ fontFamily: 'Lalezar, serif', fontSize: 32, color: '#E67E22', lineHeight: 1 }}>
+        <div style={{ fontFamily: 'Lalezar, serif', fontSize: 32, color: '#E08C36', lineHeight: 1 }}>
           {redWins}
         </div>
         <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 11, color: '#999' }}>فوز برتقالي</div>
@@ -512,7 +464,7 @@ function ScorePanel({ greenWins, redWins }: { greenWins: number; redWins: number
 
 
 /* ─────────────────────────────────────────
-   QUESTION OVERLAY (shown when cell active)
+   QUESTION OVERLAY
 ───────────────────────────────────────── */
 function QuestionOverlay({
   state,
@@ -538,11 +490,14 @@ function QuestionOverlay({
   const stage = state.stage;
   const stageBg = stage === 'first' ? '#6A8D56' : '#E08C36';
   const stageLabel = stage === 'first' ? 'الفرصة الأولى' : 'فرصة الفريق الآخر';
-  const lockedByLabel = lockedBy === 'green' ? 'الفريق الأخضر' : lockedBy === 'red' ? 'الفريق البرتقالي' : null;
-  const lockedColor = lockedBy === 'green' ? '#6A8D56' : '#E67E22';
+  // ✅ orange label instead of red
+  const lockedByLabel =
+    lockedBy === 'green'  ? 'الفريق الأخضر'    :
+    lockedBy === 'red'    ? 'الفريق البرتقالي'  : null;
+  const lockedColor = lockedBy === 'green' ? '#6A8D56' : '#E08C36';
   const timerPercent = timer / TIMER_DURATION;
   const timerColor =
-    timerPercent > 0.5 ? '#6A8D56' :
+    timerPercent > 0.5  ? '#6A8D56' :
     timerPercent > 0.25 ? '#E08C36' : '#E67E22';
 
   return (
@@ -577,15 +532,12 @@ function QuestionOverlay({
               </span>
               <span style={{
                 fontFamily: 'Lalezar, serif', fontSize: 22,
-                color: timerColor,
-                fontWeight: 900,
+                color: timerColor, fontWeight: 900,
               }}>
                 {timer}s
               </span>
             </div>
-            <div style={{
-              height: 10, background: '#f0ebe0', borderRadius: 8, overflow: 'hidden',
-            }}>
+            <div style={{ height: 10, background: '#f0ebe0', borderRadius: 8, overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
                 width: `${timerPercent * 100}%`,
@@ -644,8 +596,8 @@ function QuestionOverlay({
             disabled={!locked}
             onClick={onWrong}
             style={{
-              background: locked ? 'linear-gradient(135deg,#E67E22,#B85C0A)' : '#ececec',
-              borderColor: locked ? '#E67E22' : '#ddd',
+              background: locked ? 'linear-gradient(135deg,#E08C36,#b86e20)' : '#ececec',
+              borderColor: locked ? '#E08C36' : '#ddd',
               color: locked ? '#fff' : '#bbb',
             }}
           >
@@ -656,18 +608,14 @@ function QuestionOverlay({
           <button
             className="ctrl-btn"
             onClick={onNewQuestion}
-            style={{
-              background: '#fff', borderColor: '#2D3436', color: '#2D3436',
-            }}
+            style={{ background: '#fff', borderColor: '#2D3436', color: '#2D3436' }}
           >
             ↻ سؤال جديد
           </button>
           <button
             className="ctrl-btn"
             onClick={onResetBuzzer}
-            style={{
-              background: '#f3ead3', borderColor: '#d6c9a8', color: '#5F6A56',
-            }}
+            style={{ background: '#f3ead3', borderColor: '#d6c9a8', color: '#5F6A56' }}
           >
             ⊘ إعادة الجرس
           </button>
@@ -735,25 +683,31 @@ function QrLobby({
           امسح رمز QR لكل فريق لربط جرس الهاتف
         </p>
 
-        {/* Win direction hints */}
+        {/* ✅ Win direction hints */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
           <div style={{
             flex: 1, background: '#6A8D5618', border: '2px solid #6A8D56',
             borderRadius: 12, padding: '10px 14px', textAlign: 'center',
           }}>
-            
+            <div style={{ fontFamily: 'Lalezar, serif', fontSize: 15, color: '#6A8D56' }}>🟢 الأخضر</div>
+            <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 12, color: '#5F6A56', marginTop: 4 }}>
+              يمين ← يسار
+            </div>
           </div>
           <div style={{
-            flex: 1, background: '#E67E2218', border: '2px solid #E67E22',
+            flex: 1, background: '#E08C3618', border: '2px solid #E08C36',
             borderRadius: 12, padding: '10px 14px', textAlign: 'center',
           }}>
-            
+            <div style={{ fontFamily: 'Lalezar, serif', fontSize: 15, color: '#E08C36' }}>🟠 البرتقالي</div>
+            <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 12, color: '#b86e20', marginTop: 4 }}>
+              أعلى ↓ أسفل
+            </div>
           </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 28 }}>
-          <QrCard accent="#6A8D56" label="الفريق الأخضر" link={greenLink} />
-          <QrCard accent="#E67E22" label="الفريق البرتقالي"  link={redLink}   />
+          <QrCard accent="#6A8D56" label="الفريق الأخضر"    link={greenLink} />
+          <QrCard accent="#E08C36" label="الفريق البرتقالي" link={redLink}   />
         </div>
 
         <div style={{ display: 'flex', gap: 12 }}>
@@ -867,9 +821,7 @@ export const HurufMain: React.FC = () => {
       };
       socket.ws.onerror = async () => {
         if (activeSocketRef.current !== socket.ws) return;
-
         try {
-          // Auto-recovery should start a fresh session unless host explicitly pressed "لعبة جديدة".
           const { sessionId: newId } = await createHurufSession();
           connectToSession(newId);
         } catch {
@@ -921,7 +873,7 @@ export const HurufMain: React.FC = () => {
     const base = `${window.location.origin}/games/huruf/join?sessionId=${sessionId}`;
     return {
       green: `${base}&team=green`,
-      red: `${base}&team=red`,
+      red:   `${base}&team=red`,
     };
   }, [sessionId]);
 
@@ -931,17 +883,15 @@ export const HurufMain: React.FC = () => {
     toastRef.current = setTimeout(() => setToast(null), 1800);
   };
 
+  /**
+   * ✅ FIXED: DO now increments matchWins before broadcasting 'ended' state,
+   * so we just read matchWins directly — no need to add +1 here.
+   */
   const getCarriedWins = (sessionState: HurufSessionState | null) => {
-    const wins = {
+    return {
       green: sessionState?.matchWins?.green ?? 0,
-      red: sessionState?.matchWins?.red ?? 0,
+      red:   sessionState?.matchWins?.red   ?? 0,
     };
-
-    if (sessionState?.status === 'ended' && sessionState.winner) {
-      wins[sessionState.winner] += 1;
-    }
-
-    return wins;
   };
 
   const sendEvent = (event: HurufClientEvent, successLabel?: string) => {
@@ -976,7 +926,6 @@ export const HurufMain: React.FC = () => {
 
   const handlePlayAgain = async () => {
     stopTimer();
-
     try {
       const { sessionId: newSessionId } = await createHurufSession({
         matchWins: displayedWins,
@@ -1019,11 +968,11 @@ export const HurufMain: React.FC = () => {
       }}>
         <div style={{
           maxWidth: 420, background: '#fff', borderRadius: 22,
-          border: '3px solid #E67E22', boxShadow: '8px 8px 0 #E67E22',
+          border: '3px solid #E08C36', boxShadow: '8px 8px 0 #E08C36',
           padding: 44, textAlign: 'center',
         }}>
           <span style={{ fontSize: 54 }}>⚠️</span>
-          <h2 style={{ fontFamily: 'Lalezar, serif', fontSize: 28, color: '#E67E22', margin: '14px 0 10px' }}>
+          <h2 style={{ fontFamily: 'Lalezar, serif', fontSize: 28, color: '#E08C36', margin: '14px 0 10px' }}>
             عذراً!
           </h2>
           <p style={{ fontFamily: 'Cairo, sans-serif', color: '#666', marginBottom: 24 }}>{error}</p>
@@ -1094,7 +1043,7 @@ export const HurufMain: React.FC = () => {
             </button>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 7,
-              background: isPlaying ? '#6A8D56' : isEnded ? '#E67E22' : '#555',
+              background: isPlaying ? '#6A8D56' : isEnded ? '#E08C36' : '#555',
               padding: '5px 16px', borderRadius: 30,
               fontFamily: 'Lalezar, serif', fontSize: 14, color: '#fff',
             }}>
@@ -1132,7 +1081,7 @@ export const HurufMain: React.FC = () => {
         />
       )}
 
-
+      {/* ═══ HOW TO PLAY ═══ */}
       {showHowToPlay && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 120,
@@ -1153,12 +1102,12 @@ export const HurufMain: React.FC = () => {
               <li>بعد الضغط على <b>▶ بدء اللعبة</b> يختار النظام أول خلية عشوائياً، وتظهر بطاقة السؤال تلقائياً.</li>
               <li>كل فريق يضغط الجرس من جهازه، وأول ضغط صحيح يحصل على فرصة الإجابة خلال 10 ثوانٍ.</li>
               <li>إذا كانت الإجابة صحيحة تُحجز الخلية بلون الفريق. إذا كانت خاطئة تنتقل الفرصة للفريق الآخر.</li>
-              <li><b>شرط الفوز (الاتصال):</b> الفريق الأخضر يوصل مساراً متصلاً من أعلى اللوحة إلى أسفلها، والفريق البرتقالي يوصل مساراً متصلاً من اليمين إلى اليسار.</li>
+              <li><b>🟢 الفريق الأخضر</b> يفوز بوصل مسار من <b>اليمين إلى اليسار</b>.</li>
+              <li><b>🟠 الفريق البرتقالي</b> يفوز بوصل مسار من <b>الأعلى إلى الأسفل</b>.</li>
             </ol>
           </div>
         </div>
       )}
-
 
       {/* ═══ WINNER BANNER ═══ */}
       {isEnded && state?.winner && (
@@ -1168,7 +1117,7 @@ export const HurufMain: React.FC = () => {
             style={{
               background: state.winner === 'green'
                 ? 'linear-gradient(135deg,#6A8D56,#4a6b38)'
-                : 'linear-gradient(135deg,#E67E22,#B85C0A)',
+                : 'linear-gradient(135deg,#E08C36,#b86e20)',
               borderRadius: 18, padding: '22px 36px',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16,
               boxShadow: '0 8px 32px rgba(0,0,0,.2)',
@@ -1176,6 +1125,7 @@ export const HurufMain: React.FC = () => {
           >
             <span style={{ fontSize: 36 }}>🏆</span>
             <span style={{ fontFamily: 'Lalezar, serif', fontSize: 28, color: '#fff' }}>
+              {/* ✅ orange label */}
               الفائز: {state.winner === 'green' ? 'الفريق الأخضر' : 'الفريق البرتقالي'}
             </span>
             <span style={{ fontSize: 36 }}>🏆</span>
@@ -1200,7 +1150,7 @@ export const HurufMain: React.FC = () => {
         display: 'block',
       }}>
 
-        {/* ════ LEFT: BOARD ════ */}
+        {/* ════ BOARD ════ */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <ScorePanel greenWins={displayedWins.green} redWins={displayedWins.red} />
 
@@ -1220,13 +1170,12 @@ export const HurufMain: React.FC = () => {
               </span>
               {state && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#999' }}>
-                    دور:
-                  </span>
+                  <span style={{ fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#999' }}>دور:</span>
                   <span style={{
                     fontFamily: 'Lalezar, serif', fontSize: 16,
-                    color: state.currentTeamTurn === 'green' ? '#6A8D56' : '#E67E22',
+                    color: state.currentTeamTurn === 'green' ? '#6A8D56' : '#E08C36',
                   }}>
+                    {/* ✅ orange label */}
                     {state.currentTeamTurn === 'green' ? '🟢 الأخضر' : '🟠 البرتقالي'}
                   </span>
                 </div>
@@ -1253,10 +1202,10 @@ export const HurufMain: React.FC = () => {
               marginTop: 20, flexWrap: 'wrap',
             }}>
               {[
-                { label: 'أخضر', bg: 'linear-gradient(135deg,#6A8D56,#4a6b38)' },
-                { label: 'برتقالي',  bg: 'linear-gradient(135deg,#E67E22,#B85C0A)' },
-                { label: 'نشطة',  bg: 'linear-gradient(135deg,#fff4d6,#ffe099)', border: '2px solid #E08C36' },
-                { label: 'متاحة', bg: '#fffcf0', border: '2px solid #d6c9a8' },
+                { label: 'أخضر',   bg: 'linear-gradient(135deg,#6A8D56,#4a6b38)' },
+                { label: 'برتقالي', bg: 'linear-gradient(135deg,#E08C36,#b86e20)' },
+                { label: 'نشطة',   bg: 'linear-gradient(135deg,#fff4d6,#ffe099)', border: '2px solid #E08C36' },
+                { label: 'متاحة',  bg: '#fffcf0', border: '2px solid #d6c9a8' },
               ].map(({ label, bg, border }) => (
                 <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{
@@ -1272,18 +1221,18 @@ export const HurufMain: React.FC = () => {
           </div>
         </div>
 
-          {/* Toast */}
-          {toast && (
-            <div className="toast" style={{
-              textAlign: 'center', background: '#2D3436', color: '#FDF8E8',
-              borderRadius: 10, padding: '10px 16px',
-              fontFamily: 'Cairo, sans-serif', fontSize: 14, fontWeight: 700,
-            }}>
-              {toast}
-            </div>
-          )}
-        </div>
+        {/* Toast */}
+        {toast && (
+          <div className="toast" style={{
+            textAlign: 'center', background: '#2D3436', color: '#FDF8E8',
+            borderRadius: 10, padding: '10px 16px', marginTop: 16,
+            fontFamily: 'Cairo, sans-serif', fontSize: 14, fontWeight: 700,
+          }}>
+            {toast}
+          </div>
+        )}
       </div>
+    </div>
   );
 };
 
