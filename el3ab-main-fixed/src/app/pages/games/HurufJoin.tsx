@@ -5,7 +5,7 @@ import { connectHurufSocket } from '../../lib/huruf';
 
 type ViewState = 'READY' | 'YOU_BUZZED' | 'OTHER_TEAM_BUZZED' | 'DISCONNECTED';
 
-const TIMER_DURATION = 15; // ✅ 15 seconds as requested
+const TIMER_DURATION = 15;
 
 const GREEN       = '#6A8D56';
 const GREEN_DARK  = '#4a6b38';
@@ -69,10 +69,6 @@ const JOIN_CSS = `
     transform:translateY(-4px);
     box-shadow:0 20px 60px rgba(106,141,86,0.65),0 8px 0 #2a5a10,inset 0 -4px 0 rgba(0,0,0,0.2);
   }
-  .buzz-btn.green-btn.buzzing {
-    box-shadow:0 0 0 20px rgba(106,141,86,0.3),0 0 0 40px rgba(106,141,86,0.15),0 12px 40px rgba(106,141,86,0.5);
-    animation:buzzScale 0.3s ease infinite alternate;
-  }
 
   .buzz-btn.orange-btn {
     background:radial-gradient(circle at 35% 35%,#f0a855,#b86e20);
@@ -82,18 +78,8 @@ const JOIN_CSS = `
     transform:translateY(-4px);
     box-shadow:0 20px 60px rgba(224,140,54,0.65),0 8px 0 #7a4a10,inset 0 -4px 0 rgba(0,0,0,0.2);
   }
-  .buzz-btn.orange-btn.buzzing {
-    box-shadow:0 0 0 20px rgba(224,140,54,0.3),0 0 0 40px rgba(224,140,54,0.15),0 12px 40px rgba(224,140,54,0.5);
-    animation:buzzScale 0.3s ease infinite alternate;
-  }
 
   @keyframes buzzScale { from{transform:scale(1)} to{transform:scale(1.05)} }
-
-  .timer-ring {
-    position:absolute; top:-12px; left:-12px;
-    width:calc(100% + 24px); height:calc(100% + 24px);
-    border-radius:50%; pointer-events:none;
-  }
 
   .status-text {
     margin-top:28px; font-family:'Cairo',sans-serif; font-size:20px; font-weight:700;
@@ -171,22 +157,6 @@ function injectJoinCSS() {
   s.id = id;
   s.textContent = JOIN_CSS;
   document.head.appendChild(s);
-}
-
-function TimerRing({ progress, color }: { progress: number; color: string }) {
-  const r = 110;
-  const circ = 2 * Math.PI * r;
-  const dash = circ * progress;
-  return (
-    <svg className="timer-ring" viewBox="0 0 244 244">
-      <circle cx="122" cy="122" r={r} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
-      <circle
-        cx="122" cy="122" r={r} fill="none" stroke={color} strokeWidth="6"
-        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-        style={{ transformOrigin:'center', transform:'rotate(-90deg)', transition:'stroke-dasharray 0.1s linear' }}
-      />
-    </svg>
-  );
 }
 
 type AnswerResult = { correct: boolean; correctAnswer?: string } | null;
@@ -267,15 +237,20 @@ export const HurufJoin = () => {
         }
       }
       if (event.type === 'BUZZ_LOCKED') {
-        if (event.team === team) setStatus('YOU_BUZZED');
-        else { setStatus('OTHER_TEAM_BUZZED'); stopTimer(); }
+        if (event.team === team) {
+          setStatus('YOU_BUZZED');
+          setMyTurn(true);   // show input immediately
+          setTimeout(() => inputRef.current?.focus(), 80);
+        } else {
+          setStatus('OTHER_TEAM_BUZZED');
+          stopTimer();
+        }
       }
       if (event.type === 'TIMER_START') startTimer(event.team);
       if (event.type === 'BUZZ_RESET' || event.type === 'TIMER_EXPIRED_SERVER') {
         setStatus('READY');
         stopTimer();
       }
-      // ✅ Handle auto-comparison result from server
       if ((event as any).type === 'ANSWER_RESULT' && (event as any).team === team) {
         const e = event as any;
         setResult({ correct: e.correct, correctAnswer: e.correctAnswer });
@@ -313,7 +288,6 @@ export const HurufJoin = () => {
 
   const teamLabel      = team === 'green' ? 'الفريق الأخضر'    : 'الفريق البرتقالي';
   const otherTeamLabel = team === 'green' ? 'الفريق البرتقالي' : 'الفريق الأخضر';
-  const ringColor      = team === 'green' ? '#90ff60' : '#ffb340';
   const otherEmoji     = team === 'green' ? '🟠' : '🟢';
   const myEmoji        = team === 'green' ? '🟢' : '🟠';
 
@@ -338,8 +312,8 @@ export const HurufJoin = () => {
           )}
         </div>
 
-      ) : isBuzzing && myTurn ? (
-        /* ── ANSWER INPUT PANEL ── */
+      ) : isBuzzing ? (
+        /* ── ANSWER INPUT PANEL — appears IMMEDIATELY on buzz ── */
         <div className="answer-panel">
           {result ? (
             <div className="result-box">
@@ -356,15 +330,25 @@ export const HurufJoin = () => {
             </div>
           ) : (
             <>
-              {/* Timer */}
-              <div className="answer-timer-row">
-                <div className={`answer-timer-num ${timer <= 5 ? 'urgent' : ''}`}>{timer}</div>
-                <div className="answer-progress">
-                  <div className="answer-progress-bar"
-                    style={{ width:`${timerProgress*100}%`, background:progressColor }} />
+              {timerActive && myTurn ? (
+                <div className="answer-timer-row">
+                  <div className={`answer-timer-num ${timer <= 5 ? 'urgent' : ''}`}>{timer}</div>
+                  <div className="answer-progress">
+                    <div
+                      className="answer-progress-bar"
+                      style={{ width:`${timerProgress*100}%`, background:progressColor }}
+                    />
+                  </div>
+                  <div style={{ fontFamily:'Lalezar,serif', fontSize:13, color:'rgba(255,255,255,0.55)' }}>ثانية</div>
                 </div>
-                <div style={{ fontFamily:'Lalezar,serif', fontSize:13, color:'rgba(255,255,255,0.55)' }}>ثانية</div>
-              </div>
+              ) : (
+                <div style={{
+                  fontFamily:'Lalezar,serif', fontSize:18,
+                  color:'rgba(255,255,255,0.6)', letterSpacing:2,
+                }}>
+                  🔔 ضغطت الجرس!
+                </div>
+              )}
 
               <div className="answer-label">✏️ اكتب إجابتك!</div>
 
@@ -377,6 +361,7 @@ export const HurufJoin = () => {
                 onChange={e => setAnswer(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
                 disabled={submitted}
+                autoFocus
                 autoComplete="off"
                 autoCorrect="off"
                 spellCheck={false}
@@ -404,21 +389,17 @@ export const HurufJoin = () => {
           <button
             disabled={!canBuzz}
             onClick={() => sendRef.current?.({ type:'BUZZ_REQUEST', team })}
-            className={`buzz-btn ${team === 'green' ? 'green-btn' : 'orange-btn'} ${isBuzzing ? 'buzzing' : ''}`}
+            className={`buzz-btn ${team === 'green' ? 'green-btn' : 'orange-btn'}`}
           >
-            {timerActive && myTurn && (
-              <TimerRing progress={timerProgress} color={ringColor} />
-            )}
             <span style={{ position:'relative', zIndex:1 }}>🔔</span>
           </button>
         </div>
       )}
 
       <div className="status-text">
-        {canBuzz       && 'اضغط للإجابة!'}
-        {isBuzzing && myTurn && !result && `اكتب إجابتك الآن (${timer}s)`}
-        {isBuzzing && !myTurn && 'ضغطت الجرس!'}
-        {isOtherBuzz && myTurn && `دورك بعد ${timer} ثانية`}
+        {canBuzz     && 'اضغط للإجابة!'}
+        {isBuzzing   && !result && (timerActive ? `${timer}s` : '')}
+        {isOtherBuzz && `${otherTeamLabel} يجاوب`}
       </div>
     </div>
   );
