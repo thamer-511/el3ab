@@ -211,8 +211,8 @@ interface HexBoardProps {
   onSelect: (id: string) => void;
 }
 
-const COLS = 6;
-const ROWS = 6;
+const COLS = 5;
+const ROWS = 5;
 
 function HexBoard({ board, activeCellId, isPlaying, onSelect }: HexBoardProps) {
   const R = 50;
@@ -475,6 +475,7 @@ function QuestionOverlay({
   onWrong,
   onNewQuestion,
   onResetBuzzer,
+  onToggleAutoJudge,
 }: {
   state: HurufSessionState;
   timer: number;
@@ -484,6 +485,7 @@ function QuestionOverlay({
   onWrong: () => void;
   onNewQuestion: () => void;
   onResetBuzzer: () => void;
+  onToggleAutoJudge: () => void;
 }) {
   if (!state.activeCellId) return null;
 
@@ -492,7 +494,6 @@ function QuestionOverlay({
   const stage = state.stage;
   const stageBg = stage === 'first' ? '#6A8D56' : '#E08C36';
   const stageLabel = stage === 'first' ? 'الفرصة الأولى' : 'فرصة الفريق الآخر';
-  // ✅ orange label instead of red
   const lockedByLabel =
     lockedBy === 'green'  ? 'الفريق الأخضر'    :
     lockedBy === 'red'    ? 'الفريق البرتقالي'  : null;
@@ -501,6 +502,8 @@ function QuestionOverlay({
   const timerColor =
     timerPercent > 0.5  ? '#6A8D56' :
     timerPercent > 0.25 ? '#E08C36' : '#E67E22';
+
+  const autoJudge = state.autoJudge ?? true;
 
   return (
     <div className="question-overlay">
@@ -593,41 +596,58 @@ function QuestionOverlay({
                 {answerResult.team === 'green' ? 'الأخضر' : 'البرتقالي'} كتب: <b>«{answerResult.answer}»</b>
               </span>
             </div>
-            {!answerResult.correct && (
+            {answerResult.correct ? (
+              <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 12, color: '#6A8D56' }}>
+                {autoJudge ? '✓ تم القبول تلقائياً' : 'الكمبيوتر: صحيح — اضغط ✓ للتأكيد'}
+              </div>
+            ) : (
               <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#888' }}>
                 الإجابة الصحيحة: {answerResult.correctAnswer}
+                {!autoJudge && <span style={{ color: '#E08C36', marginRight: 8 }}>— اضغط ✗ للتأكيد أو ✓ للتجاوز</span>}
               </div>
             )}
           </div>
         )}
 
         {/* Action buttons */}
-        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-          <button
-            className="ctrl-btn"
-            disabled={!locked}
-            onClick={onCorrect}
-            style={{
-              background: locked ? 'linear-gradient(135deg,#6A8D56,#4a6b38)' : '#ececec',
-              borderColor: locked ? '#6A8D56' : '#ddd',
-              color: locked ? '#fff' : '#bbb',
-            }}
-          >
-            ✓ صحيح
-          </button>
-          <button
-            className="ctrl-btn"
-            disabled={!locked}
-            onClick={onWrong}
-            style={{
-              background: locked ? 'linear-gradient(135deg,#E08C36,#b86e20)' : '#ececec',
-              borderColor: locked ? '#E08C36' : '#ddd',
-              color: locked ? '#fff' : '#bbb',
-            }}
-          >
-            ✗ خطأ
-          </button>
-        </div>
+        {!autoJudge && (
+          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            <button
+              className="ctrl-btn"
+              disabled={!locked}
+              onClick={onCorrect}
+              style={{
+                background: locked ? 'linear-gradient(135deg,#6A8D56,#4a6b38)' : '#ececec',
+                borderColor: locked ? '#6A8D56' : '#ddd',
+                color: locked ? '#fff' : '#bbb',
+              }}
+            >
+              ✓ صحيح
+            </button>
+            <button
+              className="ctrl-btn"
+              disabled={!locked}
+              onClick={onWrong}
+              style={{
+                background: locked ? 'linear-gradient(135deg,#E08C36,#b86e20)' : '#ececec',
+                borderColor: locked ? '#E08C36' : '#ddd',
+                color: locked ? '#fff' : '#bbb',
+              }}
+            >
+              ✗ خطأ
+            </button>
+          </div>
+        )}
+
+        {autoJudge && locked && (
+          <div style={{
+            textAlign: 'center', margin: '16px 0 0',
+            fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#999',
+          }}>
+            🤖 الكمبيوتر يقيّم الإجابة تلقائياً
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
           <button
             className="ctrl-btn"
@@ -642,6 +662,34 @@ function QuestionOverlay({
             style={{ background: '#f3ead3', borderColor: '#d6c9a8', color: '#5F6A56' }}
           >
             ⊘ إعادة الجرس
+          </button>
+        </div>
+
+        {/* Auto-judge toggle */}
+        <div style={{
+          marginTop: 14, paddingTop: 12, borderTop: '1px solid #e8dfc4',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <span style={{ fontFamily: 'Cairo, sans-serif', fontSize: 12, color: '#aaa' }}>
+            وضع التقييم
+          </span>
+          <button
+            onClick={onToggleAutoJudge}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7,
+              background: autoJudge ? '#6A8D5618' : '#f3ead3',
+              border: `1.5px solid ${autoJudge ? '#6A8D56' : '#d6c9a8'}`,
+              borderRadius: 20, padding: '5px 12px', cursor: 'pointer',
+              fontFamily: 'Cairo, sans-serif', fontSize: 12,
+              color: autoJudge ? '#6A8D56' : '#888',
+            }}
+          >
+            <span style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: autoJudge ? '#6A8D56' : '#ccc',
+              display: 'inline-block',
+            }} />
+            {autoJudge ? '🤖 تلقائي' : '👁 يدوي'}
           </button>
         </div>
       </div>
@@ -1103,6 +1151,7 @@ export const HurufMain: React.FC = () => {
           onWrong={() => onControl('MAIN_MARK_WRONG', '✗ إجابة خاطئة')}
           onNewQuestion={() => onControl('MAIN_NEW_QUESTION', '↻ سؤال جديد')}
           onResetBuzzer={() => { stopTimer(); onControl('MAIN_RESET_BUZZER', '⊘ أعيد الجرس'); }}
+          onToggleAutoJudge={() => onControl('MAIN_TOGGLE_AUTO_JUDGE', state.autoJudge ? '👁 وضع يدوي' : '🤖 وضع تلقائي')}
         />
       )}
 
