@@ -22,7 +22,7 @@ export interface HurufQuestion {
 export interface BuzzerState {
   locked: boolean;
   lockedBy: Team | null;
-  timerStart: number | null; // timestamp when timer started
+  timerStart: number | null;
 }
 
 export interface HurufSessionState {
@@ -43,6 +43,7 @@ export interface HurufSessionState {
 export type HurufClientEvent =
   | { type: 'JOIN'; role: ClientRole; team?: Team }
   | { type: 'BUZZ_REQUEST'; team: Team }
+  | { type: 'SUBMIT_ANSWER'; team: Team; answer: string }  // ✅ ADDED
   | { type: 'MAIN_START_GAME' }
   | { type: 'MAIN_SELECT_CELL'; cellId: string }
   | { type: 'MAIN_MARK_CORRECT' }
@@ -61,4 +62,5 @@ export type HurufServerEvent =
   | { type: 'GAME_ENDED'; winner: Team }
   | { type: 'TIMER_START'; team: Team; durationMs: number }
   | { type: 'TIMER_EXPIRED_SERVER'; nextTeam: Team | null }
+  | { type: 'ANSWER_RESULT'; team: Team; answer: string; correct: boolean; correctAnswer: string }
   | { type: 'ERROR'; message: string };
