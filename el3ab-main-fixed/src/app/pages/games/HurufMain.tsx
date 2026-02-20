@@ -470,25 +470,21 @@ function QuestionOverlay({
   state,
   timer,
   timerActive,
+  answerResult,
   onCorrect,
   onWrong,
   onNewQuestion,
   onResetBuzzer,
-  onAnswerSubmit,
-  answerResult,
 }: {
   state: HurufSessionState;
   timer: number;
   timerActive: boolean;
+  answerResult: { team: Team; answer: string; correct: boolean; correctAnswer: string } | null;
   onCorrect: () => void;
   onWrong: () => void;
   onNewQuestion: () => void;
   onResetBuzzer: () => void;
-  onAnswerSubmit: (team: Team, answer: string) => void;
-  answerResult: { correct: boolean; answer: string; correctAnswer: string } | null;
 }) {
-  const [inputAnswer, setInputAnswer] = React.useState('');
-
   if (!state.activeCellId) return null;
 
   const question = state.activeQuestion;
@@ -496,6 +492,7 @@ function QuestionOverlay({
   const stage = state.stage;
   const stageBg = stage === 'first' ? '#6A8D56' : '#E08C36';
   const stageLabel = stage === 'first' ? 'الفرصة الأولى' : 'فرصة الفريق الآخر';
+  // ✅ orange label instead of red
   const lockedByLabel =
     lockedBy === 'green'  ? 'الفريق الأخضر'    :
     lockedBy === 'red'    ? 'الفريق البرتقالي'  : null;
@@ -504,12 +501,6 @@ function QuestionOverlay({
   const timerColor =
     timerPercent > 0.5  ? '#6A8D56' :
     timerPercent > 0.25 ? '#E08C36' : '#E67E22';
-
-  const handleSubmitAnswer = () => {
-    if (!locked || !lockedBy || !inputAnswer.trim()) return;
-    onAnswerSubmit(lockedBy, inputAnswer.trim());
-    setInputAnswer('');
-  };
 
   return (
     <div className="question-overlay">
@@ -560,75 +551,7 @@ function QuestionOverlay({
           </div>
         )}
 
-        {/* Answer input - shown when buzzer is locked and timer is active */}
-        {locked && lockedBy && timerActive && (
-          <div style={{ marginTop: 14 }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              background: `${lockedColor}12`,
-              border: `2px solid ${lockedColor}`,
-              borderRadius: 12, padding: '8px 12px', marginBottom: 8,
-            }}>
-              <span style={{ fontSize: 20 }}>🔔</span>
-              <span style={{ fontFamily: 'Lalezar, serif', fontSize: 16, color: lockedColor }}>
-                {lockedByLabel} ضغط الجرس!
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                type="text"
-                value={inputAnswer}
-                onChange={e => setInputAnswer(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSubmitAnswer()}
-                placeholder="اكتب الجواب هنا..."
-                dir="rtl"
-                style={{
-                  flex: 1, padding: '10px 14px',
-                  fontFamily: 'Cairo, sans-serif', fontSize: 16,
-                  border: `2px solid ${lockedColor}`, borderRadius: 10,
-                  outline: 'none', background: '#fff',
-                  direction: 'rtl',
-                }}
-              />
-              <button
-                onClick={handleSubmitAnswer}
-                disabled={!inputAnswer.trim()}
-                style={{
-                  padding: '10px 18px',
-                  background: inputAnswer.trim() ? `linear-gradient(135deg,${lockedColor},${lockedColor}cc)` : '#ececec',
-                  border: `2px solid ${inputAnswer.trim() ? lockedColor : '#ddd'}`,
-                  borderRadius: 10, cursor: inputAnswer.trim() ? 'pointer' : 'default',
-                  fontFamily: 'Lalezar, serif', fontSize: 16,
-                  color: inputAnswer.trim() ? '#fff' : '#bbb',
-                }}
-              >
-                إرسال
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Answer result feedback */}
-        {answerResult && (
-          <div style={{
-            marginTop: 12,
-            background: answerResult.correct ? '#6A8D5618' : '#E08C3618',
-            border: `2px solid ${answerResult.correct ? '#6A8D56' : '#E08C36'}`,
-            borderRadius: 12, padding: '10px 16px',
-            fontFamily: 'Cairo, sans-serif',
-          }}>
-            <div style={{ fontWeight: 700, fontSize: 16, color: answerResult.correct ? '#6A8D56' : '#E08C36' }}>
-              {answerResult.correct ? '✅ إجابة صحيحة!' : '❌ إجابة خاطئة'}
-            </div>
-            {!answerResult.correct && (
-              <div style={{ fontSize: 13, color: '#666', marginTop: 4 }}>
-                الجواب الصحيح: <strong>{answerResult.correctAnswer}</strong>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Buzzer status (not active timer) */}
+        {/* Buzzer status */}
         {locked && lockedBy && !timerActive && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 10,
@@ -653,6 +576,28 @@ function QuestionOverlay({
             <span style={{ fontFamily: 'Cairo, sans-serif', fontSize: 15, color: '#aaa', fontWeight: 700 }}>
               في انتظار الجرس...
             </span>
+          </div>
+        )}
+
+        {/* Answer result from mobile auto-submit */}
+        {answerResult && (
+          <div style={{
+            background: answerResult.correct ? 'rgba(106,141,86,0.15)' : 'rgba(224,140,54,0.15)',
+            border: `2px solid ${answerResult.correct ? '#6A8D56' : '#E08C36'}`,
+            borderRadius: 14, padding: '12px 16px', margin: '12px 0',
+            animation: 'overlayIn 0.3s ease',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 20 }}>{answerResult.correct ? '✅' : '❌'}</span>
+              <span style={{ fontFamily: 'Lalezar, serif', fontSize: 16, color: answerResult.correct ? '#6A8D56' : '#E08C36' }}>
+                {answerResult.team === 'green' ? 'الأخضر' : 'البرتقالي'} كتب: <b>«{answerResult.answer}»</b>
+              </span>
+            </div>
+            {!answerResult.correct && (
+              <div style={{ fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#888' }}>
+                الإجابة الصحيحة: {answerResult.correctAnswer}
+              </div>
+            )}
           </div>
         )}
 
@@ -825,7 +770,7 @@ export const HurufMain: React.FC = () => {
   const [timer, setTimer]           = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [timerTeam, setTimerTeam]   = useState<Team | null>(null);
-  const [answerResult, setAnswerResult] = useState<{ correct: boolean; answer: string; correctAnswer: string } | null>(null);
+  const [answerResult, setAnswerResult] = useState<{ team: Team; answer: string; correct: boolean; correctAnswer: string } | null>(null);
 
   const toastRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -883,23 +828,18 @@ export const HurufMain: React.FC = () => {
       const socket = connectHurufSocket(id, (event: HurufServerEvent) => {
         if (event.type === 'SESSION_STATE') {
           setState(event.state);
-          if (!event.state.buzzer.locked) {
-            stopTimer();
-            // Clear answer result after a short delay when buzzer resets
-            setTimeout(() => setAnswerResult(null), 2000);
-          }
+          if (!event.state.buzzer.locked) stopTimer();
         }
         if (event.type === 'TIMER_START') {
           startTimer(event.team);
-          setAnswerResult(null);
         }
         if (event.type === 'BUZZ_RESET' || event.type === 'TIMER_EXPIRED_SERVER') {
           stopTimer();
         }
-        // @ts-ignore - ANSWER_RESULT is a new event type
-        if (event.type === 'ANSWER_RESULT') {
-          // @ts-ignore
-          setAnswerResult({ correct: event.correct, answer: event.answer, correctAnswer: event.correctAnswer });
+        if ((event as any).type === 'ANSWER_RESULT') {
+          const e = event as any;
+          setAnswerResult({ team: e.team, answer: e.answer, correct: e.correct, correctAnswer: e.correctAnswer });
+          setTimeout(() => setAnswerResult(null), 3500);
         }
       });
 
@@ -1004,10 +944,6 @@ export const HurufMain: React.FC = () => {
     sendEvent({ type } as HurufClientEvent, label);
   };
 
-  const handleAnswerSubmit = (team: Team, answer: string) => {
-    sendEvent({ type: 'ANSWER_SUBMIT' as HurufClientEvent['type'], team, answer } as HurufClientEvent);
-  };
-
   const selectCell = (cellId: string) => {
     sendEvent({ type: 'MAIN_SELECT_CELL', cellId });
   };
@@ -1018,10 +954,11 @@ export const HurufMain: React.FC = () => {
   };
   const handleLobbySkip = () => setShowLobby(false);
 
+  // ✅ FIX: Reuse the same DO session — startGame() preserves matchWins from in-memory state.
+  // Creating a new session caused a race condition that reset the win counter.
   const handlePlayAgain = () => {
     stopTimer();
-    // ✅ FIX: Send MAIN_START_GAME on the same DO — it preserves matchWins internally
-    sendEvent({ type: 'MAIN_START_GAME' }, '↺ جولة جديدة!');
+    sendEvent({ type: 'MAIN_START_GAME' }, '↺ لعبة جديدة!');
   };
 
   const displayedWins = useMemo(() => getCarriedWins(state), [state]);
@@ -1161,12 +1098,11 @@ export const HurufMain: React.FC = () => {
           state={state}
           timer={timer}
           timerActive={timerActive}
+          answerResult={answerResult}
           onCorrect={() => onControl('MAIN_MARK_CORRECT', '✓ إجابة صحيحة!')}
           onWrong={() => onControl('MAIN_MARK_WRONG', '✗ إجابة خاطئة')}
           onNewQuestion={() => onControl('MAIN_NEW_QUESTION', '↻ سؤال جديد')}
           onResetBuzzer={() => { stopTimer(); onControl('MAIN_RESET_BUZZER', '⊘ أعيد الجرس'); }}
-          onAnswerSubmit={handleAnswerSubmit}
-          answerResult={answerResult}
         />
       )}
 
@@ -1189,10 +1125,10 @@ export const HurufMain: React.FC = () => {
             <ol style={{ margin: '16px 0 0', paddingInlineStart: 22, fontFamily: 'Cairo, sans-serif', lineHeight: 1.9, color: '#384244', fontWeight: 700 }}>
               <li>قبل البدء: افتح زر <b>📱 رموز QR</b> ليظهر رابط كل فريق، ثم يدخل كل فريق من جواله على الرابط الخاص به.</li>
               <li>بعد الضغط على <b>▶ بدء اللعبة</b> يختار النظام أول خلية عشوائياً، وتظهر بطاقة السؤال تلقائياً.</li>
-              <li>كل فريق يضغط الجرس من جهازه، وأول ضغط صحيح يحصل على فرصة الإجابة خلال 10 ثوانٍ.</li>
+              <li>كل فريق يضغط الجرس من جهازه، وأول ضغط صحيح يحصل على فرصة الإجابة خلال 15 ثانية.</li>
               <li>إذا كانت الإجابة صحيحة تُحجز الخلية بلون الفريق. إذا كانت خاطئة تنتقل الفرصة للفريق الآخر.</li>
-              <li><b>🟢 الفريق الأخضر</b> يفوز بوصل مسار من <b>اليمين إلى اليسار</b>.</li>
-              <li><b>🟠 الفريق البرتقالي</b> يفوز بوصل مسار من <b>الأعلى إلى الأسفل</b>.</li>
+              <li><b>🟢 الفريق الأخضر</b> يفوز بوصل مسار من <b>الأعلى إلى الأسفل</b> (الحواف الخضراء).</li>
+              <li><b>🟠 الفريق البرتقالي</b> يفوز بوصل مسار من <b>اليسار إلى اليمين</b> (الحواف البرتقالية).</li>
             </ol>
           </div>
         </div>
