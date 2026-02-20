@@ -6,7 +6,7 @@ import type {
   HurufSessionState,
   Team,
 } from '../../shared/huruf/types';
-import questionBank from '../../shared/huruf/questions_ar.json';
+import questionBank from '../../shared/huruf/questions.ar.json';
 
 type SocketMeta = { role: 'main' | 'mobile'; team?: Team };
 
@@ -73,6 +73,7 @@ export class HurufSessionDO {
       stage: 'first',
       winner: null,
       matchWins: { green: 0, red: 0 },
+      autoJudge: true, // default: computer auto-judges answers
       updatedAt: Date.now(),
     };
   }
@@ -80,7 +81,11 @@ export class HurufSessionDO {
   private async restoreOrInit(initialWins?: { green?: number; red?: number }) {
     const saved = await this.stateStore.storage.get<HurufSessionState>('session_state');
     if (saved) {
-      this.state = { ...saved, matchWins: saved.matchWins ?? { green: 0, red: 0 } };
+      this.state = {
+        ...saved,
+        matchWins: saved.matchWins ?? { green: 0, red: 0 },
+        autoJudge: saved.autoJudge ?? true,
+      };
       if (!saved.matchWins) await this.persistState();
       return;
     }
@@ -113,16 +118,17 @@ export class HurufSessionDO {
 
   private async handleEvent(socket: WebSocket, event: HurufClientEvent) {
     switch (event.type) {
-      case 'JOIN':               this.handleJoin(socket, event); return;
-      case 'BUZZ_REQUEST':       await this.handleBuzzRequest(event.team); return;
-      case 'MAIN_START_GAME':    await this.startGame(); return;
-      case 'MAIN_SELECT_CELL':   await this.selectCell(event.cellId); return;
-      case 'MAIN_MARK_WRONG':    await this.markWrong(); return;
-      case 'MAIN_MARK_CORRECT':  await this.markCorrect(); return;
-      case 'SUBMIT_ANSWER':      await this.handleSubmitAnswer(event.team, event.answer); return;
-      case 'MAIN_RESET_BUZZER':  await this.resetBuzzer(); return;
-      case 'MAIN_NEW_QUESTION':  await this.newQuestion(); return;
-      case 'TIMER_EXPIRED':      await this.handleTimerExpired(event.team); return;
+      case 'JOIN':                   this.handleJoin(socket, event); return;
+      case 'BUZZ_REQUEST':           await this.handleBuzzRequest(event.team); return;
+      case 'MAIN_START_GAME':        await this.startGame(); return;
+      case 'MAIN_SELECT_CELL':       await this.selectCell(event.cellId); return;
+      case 'MAIN_MARK_WRONG':        await this.markWrong(); return;
+      case 'MAIN_MARK_CORRECT':      await this.markCorrect(); return;
+      case 'SUBMIT_ANSWER':          await this.handleSubmitAnswer(event.team, event.answer); return;
+      case 'MAIN_RESET_BUZZER':      await this.resetBuzzer(); return;
+      case 'MAIN_NEW_QUESTION':      await this.newQuestion(); return;
+      case 'MAIN_TOGGLE_AUTO_JUDGE': await this.toggleAutoJudge(); return;
+      case 'TIMER_EXPIRED':          await this.handleTimerExpired(event.team); return;
       case 'PING':
         socket.send(JSON.stringify({ type: 'SESSION_STATE', state: this.state } satisfies HurufServerEvent));
         return;
@@ -171,6 +177,7 @@ export class HurufSessionDO {
       stage:            'first',
       winner:           null,
       matchWins:        previousWins, // ✅ preserved
+      autoJudge:        this.state.autoJudge ?? true, // ✅ preserved
       updatedAt:        Date.now(),
     };
 
@@ -280,11 +287,22 @@ export class HurufSessionDO {
       correctAnswer: this.state.activeQuestion.answer,
     } as any);
 
-    if (correct) {
-      await this.markCorrect();
-    } else {
-      await this.markWrong();
+    // Only auto-apply the result if autoJudge is enabled
+    if (this.state.autoJudge) {
+      if (correct) {
+        await this.markCorrect();
+      } else {
+        await this.markWrong();
+      }
     }
+    // In manual mode, host must click ✓ or ✗ to apply the result
+  }
+
+  private async toggleAutoJudge() {
+    this.state.autoJudge = !this.state.autoJudge;
+    this.state.updatedAt = Date.now();
+    await this.persistState();
+    this.broadcastState();
   }
 
   private async markWrong() {
@@ -350,23 +368,41 @@ export class HurufSessionDO {
   private normalizeArabic(text: string): string {
     return text
       .trim()
-      .replace(/[\u064B-\u065F\u0670]/g, '')
-      .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627')
-      .replace(/\u0629/g, '\u0647')
-      .replace(/\u0640/g, '')
+      .replace(/[\u064B-\u065F\u0670]/g, '')            // strip tashkeel
+      .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627') // أإآٱ → ا
+      .replace(/\u0629/g, '\u0647')                     // ة → ه
+      .replace(/\u0649/g, '\u064A')                     // ى → ي
+      .replace(/\u0640/g, '')                           // tatweel
       .replace(/\s+/g, ' ')
       .toLowerCase();
   }
 
+  /**
+   * Fuzzy answer matching:
+   * - Normalizes Arabic (hamza, taa marbuta, alef variants, ى/ي)
+   * - Exact / substring match
+   * - Levenshtein with 30% tolerance for typos
+   * - Word-overlap for multi-word answers like "من العشرة المبشرين بالجنة"
+   */
   private isAnswerCorrect(submitted: string, correct: string): boolean {
     const a = this.normalizeArabic(submitted);
     const b = this.normalizeArabic(correct);
+
     if (a === b) return true;
     if (a.includes(b) || b.includes(a)) return true;
-    if (b.length <= 15) {
-      const dist = this.levenshtein(a, b);
-      if (dist <= Math.max(1, Math.floor(b.length * 0.25))) return true;
+
+    // Levenshtein with generous tolerance scaled to answer length
+    const maxDist = Math.max(1, Math.floor(b.length * 0.3));
+    if (this.levenshtein(a, b) <= maxDist) return true;
+
+    // Word-level overlap: submitted must contain >= 60% of correct answer words
+    const wordsA = a.split(' ').filter(Boolean);
+    const wordsB = b.split(' ').filter(Boolean);
+    if (wordsB.length >= 2) {
+      const matched = wordsB.filter(w => wordsA.some(wa => wa === w || this.levenshtein(wa, w) <= 1));
+      if (matched.length / wordsB.length >= 0.6) return true;
     }
+
     return false;
   }
 
