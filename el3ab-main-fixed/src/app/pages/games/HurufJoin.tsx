@@ -7,6 +7,17 @@ type ViewState = 'READY' | 'YOU_BUZZED' | 'OTHER_TEAM_BUZZED' | 'DISCONNECTED' |
 
 const TIMER_DURATION = 10; // seconds
 
+// Brand colors
+const GREEN       = '#6A8D56';
+const GREEN_DARK  = '#4a6b38';
+const GREEN_GLOW  = 'rgba(106,141,86,0.5)';
+const GREEN_GLOW2 = 'rgba(106,141,86,0.25)';
+
+const ORANGE       = '#E08C36';
+const ORANGE_DARK  = '#b86e20';
+const ORANGE_GLOW  = 'rgba(224,140,54,0.5)';
+const ORANGE_GLOW2 = 'rgba(224,140,54,0.25)';
+
 const JOIN_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Lalezar&display=swap');
 
@@ -29,8 +40,8 @@ const JOIN_CSS = `
     background: linear-gradient(160deg, #1a2e1a 0%, #2d4a2d 50%, #1a3a1a 100%);
   }
 
-  .join-root.red-theme {
-    background: linear-gradient(160deg, #2e1a1a 0%, #4a2d2d 50%, #3a1a1a 100%);
+  .join-root.orange-theme {
+    background: linear-gradient(160deg, #2e1e0a 0%, #4a2e0a 50%, #3a200a 100%);
   }
 
   .join-root.buzzing-green {
@@ -38,9 +49,9 @@ const JOIN_CSS = `
     animation: greenPulse 0.6s ease infinite alternate;
   }
 
-  .join-root.buzzing-red {
-    background: linear-gradient(160deg, #4e2a2a 0%, #7a4a4a 50%, #4e2a2a 100%);
-    animation: redPulse 0.6s ease infinite alternate;
+  .join-root.buzzing-orange {
+    background: linear-gradient(160deg, #4e2e0a 0%, #7a4a10 50%, #4e2e0a 100%);
+    animation: orangePulse 0.6s ease infinite alternate;
   }
 
   @keyframes greenPulse {
@@ -48,7 +59,7 @@ const JOIN_CSS = `
     to { filter: brightness(1.3); }
   }
 
-  @keyframes redPulse {
+  @keyframes orangePulse {
     from { filter: brightness(1); }
     to { filter: brightness(1.3); }
   }
@@ -91,33 +102,35 @@ const JOIN_CSS = `
     transform: scale(0.95);
   }
 
+  /* ── GREEN button ── */
   .buzz-btn.green-btn {
     background: radial-gradient(circle at 35% 35%, #8ab56a, #4a7a2a);
-    box-shadow: 0 12px 40px rgba(106,180,70,0.5), 0 4px 0 #2a5a10, inset 0 -4px 0 rgba(0,0,0,0.2);
+    box-shadow: 0 12px 40px rgba(106,141,86,0.5), 0 4px 0 #2a5a10, inset 0 -4px 0 rgba(0,0,0,0.2);
   }
 
   .buzz-btn.green-btn:hover:not(:disabled) {
     transform: translateY(-4px);
-    box-shadow: 0 20px 60px rgba(106,180,70,0.65), 0 8px 0 #2a5a10, inset 0 -4px 0 rgba(0,0,0,0.2);
+    box-shadow: 0 20px 60px rgba(106,141,86,0.65), 0 8px 0 #2a5a10, inset 0 -4px 0 rgba(0,0,0,0.2);
   }
 
   .buzz-btn.green-btn.buzzing {
-    box-shadow: 0 0 0 20px rgba(106,180,70,0.3), 0 0 0 40px rgba(106,180,70,0.15), 0 12px 40px rgba(106,180,70,0.5);
+    box-shadow: 0 0 0 20px rgba(106,141,86,0.3), 0 0 0 40px rgba(106,141,86,0.15), 0 12px 40px rgba(106,141,86,0.5);
     animation: buzzScale 0.3s ease infinite alternate;
   }
 
-  .buzz-btn.red-btn {
-    background: radial-gradient(circle at 35% 35%, #d66060, #8a2020);
-    box-shadow: 0 12px 40px rgba(200,50,50,0.5), 0 4px 0 #5a1010, inset 0 -4px 0 rgba(0,0,0,0.2);
+  /* ── ORANGE button ── */
+  .buzz-btn.orange-btn {
+    background: radial-gradient(circle at 35% 35%, #f0a855, #b86e20);
+    box-shadow: 0 12px 40px rgba(224,140,54,0.5), 0 4px 0 #7a4a10, inset 0 -4px 0 rgba(0,0,0,0.2);
   }
 
-  .buzz-btn.red-btn:hover:not(:disabled) {
+  .buzz-btn.orange-btn:hover:not(:disabled) {
     transform: translateY(-4px);
-    box-shadow: 0 20px 60px rgba(200,50,50,0.65), 0 8px 0 #5a1010, inset 0 -4px 0 rgba(0,0,0,0.2);
+    box-shadow: 0 20px 60px rgba(224,140,54,0.65), 0 8px 0 #7a4a10, inset 0 -4px 0 rgba(0,0,0,0.2);
   }
 
-  .buzz-btn.red-btn.buzzing {
-    box-shadow: 0 0 0 20px rgba(200,50,50,0.3), 0 0 0 40px rgba(200,50,50,0.15), 0 12px 40px rgba(200,50,50,0.5);
+  .buzz-btn.orange-btn.buzzing {
+    box-shadow: 0 0 0 20px rgba(224,140,54,0.3), 0 0 0 40px rgba(224,140,54,0.15), 0 12px 40px rgba(224,140,54,0.5);
     animation: buzzScale 0.3s ease infinite alternate;
   }
 
@@ -174,14 +187,6 @@ const JOIN_CSS = `
     font-family: 'Lalezar', serif;
     font-size: 24px;
     color: rgba(255,255,255,0.8);
-    text-align: center;
-  }
-
-  .disconnected-msg {
-    color: rgba(255,255,255,0.5);
-    font-family: 'Cairo', sans-serif;
-    font-size: 15px;
-    margin-top: 12px;
     text-align: center;
   }
 
@@ -332,18 +337,25 @@ export const HurufJoin = () => {
   const isBuzzing = status === 'YOU_BUZZED';
   const isOtherBuzzing = status === 'OTHER_TEAM_BUZZED';
 
+  // ✅ Use 'orange' theme for red team instead of 'red'
   const themeClass = isBuzzing
-    ? `buzzing-${team}`
-    : `${team}-theme`;
+    ? `buzzing-${team === 'green' ? 'green' : 'orange'}`
+    : `${team === 'green' ? 'green' : 'orange'}-theme`;
 
-  const teamLabel = team === 'green' ? 'الفريق الأخضر' : 'الفريق الأحمر';
-  const otherTeamLabel = team === 'green' ? 'الفريق الأحمر' : 'الفريق الأخضر';
-  const timerProgress = timer / 10;
+  const teamLabel      = team === 'green' ? 'الفريق الأخضر'    : 'الفريق البرتقالي';
+  const otherTeamLabel = team === 'green' ? 'الفريق البرتقالي' : 'الفريق الأخضر';
+  const timerProgress  = timer / 10;
+
+  // ✅ Brand colors for ring
+  const timerRingColor = team === 'green' ? '#90ff60' : '#ffb340';
+  // ✅ Other team emoji
+  const otherEmoji = team === 'green' ? '🟠' : '🟢';
+  const myEmoji    = team === 'green' ? '🟢' : '🟠';
 
   return (
     <div className={`join-root ${themeClass}`}>
       <div className="team-badge">
-        {team === 'green' ? '🟢' : '🔴'} {teamLabel}
+        {myEmoji} {teamLabel}
       </div>
 
       {status === 'DISCONNECTED' ? (
@@ -355,7 +367,7 @@ export const HurufJoin = () => {
         </div>
       ) : isOtherBuzzing ? (
         <div className="other-buzz">
-          <div className="emoji">{team === 'green' ? '🔴' : '🟢'}</div>
+          <div className="emoji">{otherEmoji}</div>
           <div className="msg">{otherTeamLabel}<br />ضغط الجرس!</div>
           {timerActive && !myTimerRunning && (
             <div className={`timer-display ${timer <= 3 ? 'urgent' : ''}`}>{timer}</div>
@@ -366,13 +378,13 @@ export const HurufJoin = () => {
           <button
             disabled={!canBuzz}
             onClick={() => sendRef.current?.({ type: 'BUZZ_REQUEST', team })}
-            className={`buzz-btn ${team}-btn ${isBuzzing ? 'buzzing' : ''}`}
+            className={`buzz-btn ${team === 'green' ? 'green-btn' : 'orange-btn'} ${isBuzzing ? 'buzzing' : ''}`}
           >
             {/* Timer ring */}
             {timerActive && myTimerRunning && (
               <TimerRing
                 progress={timerProgress}
-                color={team === 'green' ? '#90ff60' : '#ff9060'}
+                color={timerRingColor}
               />
             )}
 
