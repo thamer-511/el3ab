@@ -51,7 +51,6 @@ const JOIN_CSS = `
     color:rgba(255,255,255,0.85); background:rgba(255,255,255,0.1); backdrop-filter:blur(10px);
   }
 
-  /* ── BUZZ BUTTON ── */
   .buzz-btn {
     position:relative; width:220px; height:220px; border-radius:50%; border:none;
     cursor:pointer; font-family:'Lalezar',serif; font-size:48px; color:#fff;
@@ -79,14 +78,11 @@ const JOIN_CSS = `
     box-shadow:0 20px 60px rgba(224,140,54,0.65),0 8px 0 #7a4a10,inset 0 -4px 0 rgba(0,0,0,0.2);
   }
 
-  @keyframes buzzScale { from{transform:scale(1)} to{transform:scale(1.05)} }
-
   .status-text {
     margin-top:28px; font-family:'Cairo',sans-serif; font-size:20px; font-weight:700;
     text-align:center; color:rgba(255,255,255,0.9); min-height:32px;
   }
 
-  /* ── OTHER TEAM BUZZED ── */
   .other-buzz {
     display:flex; flex-direction:column; align-items:center; gap:16px;
     padding:32px 40px; background:rgba(0,0,0,0.3); border-radius:24px;
@@ -100,7 +96,6 @@ const JOIN_CSS = `
 
   @keyframes urgentBlink { from{opacity:1} to{opacity:0.6} }
 
-  /* ── ANSWER PANEL ── */
   .answer-panel {
     width:100%; max-width:420px; background:rgba(0,0,0,0.35);
     border:2px solid rgba(255,255,255,0.15); border-radius:24px;
@@ -142,7 +137,6 @@ const JOIN_CSS = `
   .answer-submit-btn:active:not(:disabled) { transform:scale(0.96); }
   .answer-submit-btn:disabled { opacity:0.45; cursor:not-allowed; }
 
-  /* ── RESULT ── */
   .result-box {
     display:flex; flex-direction:column; align-items:center; gap:10px;
     text-align:center; animation:resultPop 0.4s cubic-bezier(.22,1,.36,1);
@@ -176,10 +170,11 @@ export const HurufJoin = () => {
   const [submitted, setSubmitted]     = useState(false);
   const [result, setResult]           = useState<AnswerResult>(null);
 
-  const sendRef     = useRef<((e: any) => void) | null>(null);
-  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
-  const timerStart  = useRef(0);
-  const inputRef    = useRef<HTMLInputElement | null>(null);
+  const sendRef        = useRef<((e: any) => void) | null>(null);
+  const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null);
+  const submitTimeout  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerStart     = useRef(0);
+  const inputRef       = useRef<HTMLInputElement | null>(null);
 
   const startTimer = (forTeam: Team) => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -209,6 +204,7 @@ export const HurufJoin = () => {
 
   const stopTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    if (submitTimeout.current) clearTimeout(submitTimeout.current);
     setTimerActive(false);
     setMyTurn(false);
     setTimer(0);
@@ -221,6 +217,12 @@ export const HurufJoin = () => {
     if (!answer.trim() || submitted) return;
     setSubmitted(true);
     sendRef.current?.({ type: 'SUBMIT_ANSWER', team, answer: answer.trim() });
+
+    // Safety fallback: if server never responds within 6s, unlock the button
+    if (submitTimeout.current) clearTimeout(submitTimeout.current);
+    submitTimeout.current = setTimeout(() => {
+      setSubmitted(false);
+    }, 6000);
   };
 
   const connect = () => {
@@ -239,7 +241,7 @@ export const HurufJoin = () => {
       if (event.type === 'BUZZ_LOCKED') {
         if (event.team === team) {
           setStatus('YOU_BUZZED');
-          setMyTurn(true);   // show input immediately
+          setMyTurn(true);
           setTimeout(() => inputRef.current?.focus(), 80);
         } else {
           setStatus('OTHER_TEAM_BUZZED');
@@ -251,10 +253,12 @@ export const HurufJoin = () => {
         setStatus('READY');
         stopTimer();
       }
+      // Handle answer result from server
       if ((event as any).type === 'ANSWER_RESULT' && (event as any).team === team) {
         const e = event as any;
+        if (submitTimeout.current) clearTimeout(submitTimeout.current);
         setResult({ correct: e.correct, correctAnswer: e.correctAnswer });
-        setTimeout(() => { setResult(null); setSubmitted(false); }, 2500);
+        setTimeout(() => { setResult(null); setSubmitted(false); }, 3000);
       }
     });
 
@@ -271,7 +275,10 @@ export const HurufJoin = () => {
 
   useEffect(() => {
     connect();
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (submitTimeout.current) clearTimeout(submitTimeout.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, team]);
 
@@ -313,7 +320,6 @@ export const HurufJoin = () => {
         </div>
 
       ) : isBuzzing ? (
-        /* ── ANSWER INPUT PANEL — appears IMMEDIATELY on buzz ── */
         <div className="answer-panel">
           {result ? (
             <div className="result-box">
@@ -384,7 +390,6 @@ export const HurufJoin = () => {
         </div>
 
       ) : (
-        /* ── BUZZ BUTTON ── */
         <div style={{ position:'relative', display:'inline-block' }}>
           <button
             disabled={!canBuzz}
