@@ -1135,13 +1135,6 @@ export const HurufMain: React.FC = () => {
               }} />
               {state?.autoJudge ? '🤖 تلقائي' : '👁 يدوي'}
             </button>
-              <span style={{
-                width: 7, height: 7, borderRadius: '50%',
-                background: 'rgba(255,255,255,.85)',
-                display: 'inline-block',
-              }} />
-              {isPlaying ? 'جارية' : isEnded ? 'انتهت' : 'انتظار'}
-            </div>
           </div>
         </div>
       </header>
