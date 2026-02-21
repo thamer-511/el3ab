@@ -1113,12 +1113,28 @@ export const HurufMain: React.FC = () => {
             >
               📘 كيفية اللعب
             </button>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              background: isPlaying ? '#6A8D56' : isEnded ? '#E08C36' : '#555',
-              padding: '5px 16px', borderRadius: 30,
-              fontFamily: 'Lalezar, serif', fontSize: 14, color: '#fff',
-            }}>
+
+            {/* ── زر التقييم — دايماً ظاهر في الـ header ── */}
+            <button
+              onClick={() => onControl('MAIN_TOGGLE_AUTO_JUDGE', state?.autoJudge ? '👁 وضع يدوي' : '🤖 وضع تلقائي')}
+              title={state?.autoJudge ? 'انقر للتحويل لوضع يدوي' : 'انقر للتحويل لوضع تلقائي'}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: state?.autoJudge ? 'rgba(106,141,86,0.25)' : 'rgba(224,140,54,0.25)',
+                border: `1.5px solid ${state?.autoJudge ? '#6A8D56' : '#E08C36'}`,
+                borderRadius: 20, padding: '5px 14px', cursor: 'pointer',
+                fontFamily: 'Cairo, sans-serif', fontSize: 13,
+                color: state?.autoJudge ? '#a8d98a' : '#f0b870',
+                transition: 'all 0.2s',
+              }}
+            >
+              <span style={{
+                width: 7, height: 7, borderRadius: '50%',
+                background: state?.autoJudge ? '#6A8D56' : '#E08C36',
+                display: 'inline-block',
+              }} />
+              {state?.autoJudge ? '🤖 تلقائي' : '👁 يدوي'}
+            </button>
               <span style={{
                 width: 7, height: 7, borderRadius: '50%',
                 background: 'rgba(255,255,255,.85)',
