@@ -234,6 +234,31 @@ export const HurufJoin = () => {
           stopTimer();
         } else if (event.state.buzzer.lockedBy === team) {
           setStatus('YOU_BUZZED');
+          // ✅ FIX: Restore timer on reconnect if buzzer is locked by us
+          if (event.state.buzzer.timerStart && !timerRef.current) {
+            const elapsed = (Date.now() - event.state.buzzer.timerStart) / 1000;
+            const remaining = TIMER_DURATION - elapsed;
+            if (remaining > 0) {
+              timerStart.current = event.state.buzzer.timerStart;
+              setTimer(Math.ceil(remaining));
+              setTimerActive(true);
+              setMyTurn(true);
+              setSubmitted(false);
+              setResult(null);
+              timerRef.current = setInterval(() => {
+                const el = (Date.now() - timerStart.current) / 1000;
+                const rem = Math.max(0, TIMER_DURATION - el);
+                setTimer(Math.ceil(rem));
+                if (rem <= 0) {
+                  clearInterval(timerRef.current!);
+                  timerRef.current = null;
+                  setTimerActive(false);
+                  setMyTurn(false);
+                  sendRef.current?.({ type: 'TIMER_EXPIRED', team });
+                }
+              }, 100);
+            }
+          }
         } else {
           setStatus('OTHER_TEAM_BUZZED');
         }
@@ -254,10 +279,9 @@ export const HurufJoin = () => {
         stopTimer();
       }
       // Handle answer result from server
-      if ((event as any).type === 'ANSWER_RESULT' && (event as any).team === team) {
-        const e = event as any;
+      if (event.type === 'ANSWER_RESULT' && event.team === team) {
         if (submitTimeout.current) clearTimeout(submitTimeout.current);
-        setResult({ correct: e.correct, correctAnswer: e.correctAnswer });
+        setResult({ correct: event.correct, correctAnswer: event.correctAnswer });
         setTimeout(() => { setResult(null); setSubmitted(false); }, 3000);
       }
     });
