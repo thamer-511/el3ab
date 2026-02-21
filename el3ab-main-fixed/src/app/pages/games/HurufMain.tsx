@@ -872,11 +872,20 @@ export const HurufMain: React.FC = () => {
       setSessionInUrl(id);
 
       activeSocketRef.current?.close();
-
-      const socket = connectHurufSocket(id, (event: HurufServerEvent) => {
+ 
+    const socket = connectHurufSocket(id, (event: HurufServerEvent) => {
         if (event.type === 'SESSION_STATE') {
           setState(event.state);
-          if (!event.state.buzzer.locked) stopTimer();
+          if (!event.state.buzzer.locked) {
+            stopTimer();
+          } else if (event.state.buzzer.locked && event.state.buzzer.lockedBy && event.state.buzzer.timerStart) {
+            // ✅ FIX: Restore timer on reconnect if buzzer is still locked
+            const elapsed = (Date.now() - event.state.buzzer.timerStart) / 1000;
+            const remaining = TIMER_DURATION - elapsed;
+            if (remaining > 0 && !timerIntervalRef.current) {
+              startTimer(event.state.buzzer.lockedBy);
+            }
+          }
         }
         if (event.type === 'TIMER_START') {
           startTimer(event.team);
@@ -884,9 +893,8 @@ export const HurufMain: React.FC = () => {
         if (event.type === 'BUZZ_RESET' || event.type === 'TIMER_EXPIRED_SERVER') {
           stopTimer();
         }
-        if ((event as any).type === 'ANSWER_RESULT') {
-          const e = event as any;
-          setAnswerResult({ team: e.team, answer: e.answer, correct: e.correct, correctAnswer: e.correctAnswer });
+        if (event.type === 'ANSWER_RESULT') {
+          setAnswerResult({ team: event.team, answer: event.answer, correct: event.correct, correctAnswer: event.correctAnswer });
           setTimeout(() => setAnswerResult(null), 3500);
         }
       });
