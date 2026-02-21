@@ -6,12 +6,12 @@ import type {
   HurufSessionState,
   Team,
 } from '../../shared/huruf/types';
-import questionBank from '../../shared/huruf/questions.ar.json';
+import questionBank from '../../shared/huruf/questions_ar.json';
 
 type SocketMeta = { role: 'main' | 'mobile'; team?: Team };
 
 const GRID_SIZE = 5;
-const TIMER_DURATION_MS = 15000; // 15 seconds
+const TIMER_DURATION_MS = 15000;
 
 const ALL_LETTERS = Object.keys(questionBank as Record<string, HurufQuestion[]>);
 
@@ -73,7 +73,7 @@ export class HurufSessionDO {
       stage: 'first',
       winner: null,
       matchWins: { green: 0, red: 0 },
-      autoJudge: true, // default: computer auto-judges answers
+      autoJudge: true,
       updatedAt: Date.now(),
     };
   }
@@ -150,13 +150,10 @@ export class HurufSessionDO {
     socket.send(JSON.stringify({ type: 'SESSION_STATE', state: this.state } satisfies HurufServerEvent));
   }
 
-  // ── GAME FLOW ──────────────────────────────
-
   private async startGame() {
     this.clearTimer();
     this.usedQuestionsByCell.clear();
 
-    // ✅ Read wins from in-memory state (already updated by markCorrect before persist)
     const previousWins = {
       green: this.state.matchWins?.green ?? 0,
       red:   this.state.matchWins?.red   ?? 0,
@@ -166,19 +163,19 @@ export class HurufSessionDO {
     const randomCell = freshBoard[Math.floor(Math.random() * freshBoard.length)] ?? null;
 
     this.state = {
-      sessionId:        this.state.sessionId,
-      status:           'playing',
-      board:            freshBoard,
-      currentTeamTurn:  'green',
-      activeCellId:     randomCell?.id ?? null,
-      activeQuestion:   randomCell ? this.pickQuestionFromBoard(freshBoard, randomCell.id) : null,
-      buzzer:           { locked: false, lockedBy: null, timerStart: null },
-      attemptNo:        1,
-      stage:            'first',
-      winner:           null,
-      matchWins:        previousWins, // ✅ preserved
-      autoJudge:        this.state.autoJudge ?? true, // ✅ preserved
-      updatedAt:        Date.now(),
+      sessionId:       this.state.sessionId,
+      status:          'playing',
+      board:           freshBoard,
+      currentTeamTurn: 'green',
+      activeCellId:    randomCell?.id ?? null,
+      activeQuestion:  randomCell ? this.pickQuestionFromBoard(freshBoard, randomCell.id) : null,
+      buzzer:          { locked: false, lockedBy: null, timerStart: null },
+      attemptNo:       1,
+      stage:           'first',
+      winner:          null,
+      matchWins:       previousWins,
+      autoJudge:       this.state.autoJudge ?? true,
+      updatedAt:       Date.now(),
     };
 
     await this.persistState();
@@ -275,7 +272,18 @@ export class HurufSessionDO {
   /** Mobile auto-submit: server fuzzy-checks the answer */
   private async handleSubmitAnswer(team: Team, answer: string) {
     if (!this.state.buzzer.locked || this.state.buzzer.lockedBy !== team) return;
-    if (!this.state.activeQuestion) return;
+
+    // Always respond — never silently drop
+    if (!this.state.activeQuestion) {
+      this.broadcast({
+        type: 'ANSWER_RESULT',
+        team,
+        answer,
+        correct: false,
+        correctAnswer: '—',
+      } as any);
+      return;
+    }
 
     const correct = this.isAnswerCorrect(answer, this.state.activeQuestion.answer);
 
@@ -287,7 +295,6 @@ export class HurufSessionDO {
       correctAnswer: this.state.activeQuestion.answer,
     } as any);
 
-    // Only auto-apply the result if autoJudge is enabled
     if (this.state.autoJudge) {
       if (correct) {
         await this.markCorrect();
@@ -295,7 +302,6 @@ export class HurufSessionDO {
         await this.markWrong();
       }
     }
-    // In manual mode, host must click ✓ or ✗ to apply the result
   }
 
   private async toggleAutoJudge() {
@@ -341,7 +347,6 @@ export class HurufSessionDO {
 
     const won = this.checkWin(team);
     if (won) {
-      // ✅ Increment FIRST, then set ended — so broadcastState sends updated wins
       this.state.matchWins = {
         green: (this.state.matchWins?.green ?? 0) + (team === 'green' ? 1 : 0),
         red:   (this.state.matchWins?.red   ?? 0) + (team === 'red'   ? 1 : 0),
@@ -368,22 +373,15 @@ export class HurufSessionDO {
   private normalizeArabic(text: string): string {
     return text
       .trim()
-      .replace(/[\u064B-\u065F\u0670]/g, '')            // strip tashkeel
-      .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627') // أإآٱ → ا
-      .replace(/\u0629/g, '\u0647')                     // ة → ه
-      .replace(/\u0649/g, '\u064A')                     // ى → ي
-      .replace(/\u0640/g, '')                           // tatweel
+      .replace(/[\u064B-\u065F\u0670]/g, '')
+      .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627')
+      .replace(/\u0629/g, '\u0647')
+      .replace(/\u0649/g, '\u064A')
+      .replace(/\u0640/g, '')
       .replace(/\s+/g, ' ')
       .toLowerCase();
   }
 
-  /**
-   * Fuzzy answer matching:
-   * - Normalizes Arabic (hamza, taa marbuta, alef variants, ى/ي)
-   * - Exact / substring match
-   * - Levenshtein with 30% tolerance for typos
-   * - Word-overlap for multi-word answers like "من العشرة المبشرين بالجنة"
-   */
   private isAnswerCorrect(submitted: string, correct: string): boolean {
     const a = this.normalizeArabic(submitted);
     const b = this.normalizeArabic(correct);
@@ -391,11 +389,9 @@ export class HurufSessionDO {
     if (a === b) return true;
     if (a.includes(b) || b.includes(a)) return true;
 
-    // Levenshtein with generous tolerance scaled to answer length
     const maxDist = Math.max(1, Math.floor(b.length * 0.3));
     if (this.levenshtein(a, b) <= maxDist) return true;
 
-    // Word-level overlap: submitted must contain >= 60% of correct answer words
     const wordsA = a.split(' ').filter(Boolean);
     const wordsB = b.split(' ').filter(Boolean);
     if (wordsB.length >= 2) {
@@ -421,12 +417,8 @@ export class HurufSessionDO {
 
   // ── BOARD CREATION ─────────────────────────
 
-  /**
-   * 5×5 honeycomb board.
-   * Each cell gets a UNIQUE letter from questions_ar.json (no repeats).
-   */
   private generateBoard(): HurufCell[] {
-    const totalCells = GRID_SIZE * GRID_SIZE; // 25
+    const totalCells = GRID_SIZE * GRID_SIZE;
 
     let letters: string[];
     if (ALL_LETTERS.length >= totalCells) {
@@ -442,7 +434,13 @@ export class HurufSessionDO {
     const cells: HurufCell[] = [];
     for (let row = 0; row < GRID_SIZE; row++) {
       for (let col = 0; col < GRID_SIZE; col++) {
-        cells.push({ id: `${row}-${col}`, letter: letters[row * GRID_SIZE + col], owner: null, closed: false, neighbors: [] });
+        cells.push({
+          id: `${row}-${col}`,
+          letter: letters[row * GRID_SIZE + col],
+          owner: null,
+          closed: false,
+          neighbors: [],
+        });
       }
     }
 
@@ -465,10 +463,6 @@ export class HurufSessionDO {
 
   // ── WIN DETECTION ──────────────────────────
 
-  /**
-   * 🟢 Green  wins by connecting TOP row    → BOTTOM row  (board: top & bottom = green)
-   * 🟠 Orange wins by connecting LEFT col   → RIGHT col   (board: left & right = orange)
-   */
   private checkWin(team: Team): boolean {
     const owned = new Map(this.state.board.map((c) => [c.id, c.owner]));
     const queue: string[] = [];
