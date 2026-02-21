@@ -12,7 +12,7 @@ database_id = "d83ddac2-7e85-4764-9415-be684b30950b"
 name = "HURUF_SESSION_DO"
 class_name = "HurufSessionDO"
 
-# Migrations - use new_sqlite_classes for free plan
+# Migrations
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["HurufSessionDO"]
