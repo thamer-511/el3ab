@@ -281,7 +281,7 @@ export class HurufSessionDO {
         answer,
         correct: false,
         correctAnswer: '—',
-      } as any);
+      });
       return;
     }
 
@@ -293,7 +293,7 @@ export class HurufSessionDO {
       answer,
       correct,
       correctAnswer: this.state.activeQuestion.answer,
-    } as any);
+    });
 
     if (this.state.autoJudge) {
       if (correct) {
